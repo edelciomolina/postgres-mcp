@@ -43,7 +43,7 @@ sequenceDiagram
     Proxy-->>Client: result { serverInfo, capabilities,<br/>instructions: MCP_INSTRUCTIONS }
 
     %% ── Schema check before query ─────────────────────────────────────
-    note over Client,PG: Correct flow — inspect schema before querying
+    note over Client,PG: Correct flow - inspect schema before querying
     Client->>Proxy: tools/call pg_manage_schema<br/>{ operation: "get_info", tableName: "users" }
     Proxy->>Child: tools/call pg_manage_schema (passthrough)
     Child->>PG: INFORMATION_SCHEMA query
@@ -61,7 +61,7 @@ sequenceDiagram
     Proxy-->>Client: result { rows }
 
     %% ── Multi-statement blocked ───────────────────────────────────────
-    note over Client,PG: Blocked flow — multi-statement rejected by the proxy
+    note over Client,PG: Blocked flow - multi-statement rejected by the proxy
     Client->>Proxy: tools/call pg_execute_query<br/>{ query: "SELECT COUNT(*) FROM users#59;<br/>  SELECT * FROM users" }
     Proxy->>Proxy: hasMultipleStatements(query)<br/>→ true 🚫
     note over Proxy: Child never receives<br/>this message
@@ -91,7 +91,7 @@ The `initialize` response is the only message the proxy **modifies**. It appends
 - Use `operation="count"` for row counts
 
 ### 3. Multi-statement guard on the hot path
-Every `tools/call` to `pg_execute_query` is inspected before being forwarded. If `hasMultipleStatements()` returns `true`, the proxy returns an MCP error response directly — the child process is never involved. String literals containing `;` are stripped before the check to avoid false positives (e.g. `WHERE name = 'a;b'`).
+Every `tools/call` to `pg_execute_query` is inspected before being forwarded. If `hasMultipleStatements()` returns `true`, the proxy returns an MCP error response directly - the child process is never involved. String literals containing `;` are stripped before the check to avoid false positives (e.g. `WHERE name = 'a;b'`).
 
 ### 4. Credential isolation
 Credentials never appear in MCP tool arguments or tool configs. They are resolved at boot from a `.env` file, encoded into a connection string, and injected as `POSTGRES_CONNECTION_STRING` into the child's environment. The key names can be remapped via `MCP_KEY_*` environment variables, allowing the same `.env` to serve multiple services without duplication.

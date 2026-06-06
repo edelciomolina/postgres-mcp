@@ -164,7 +164,7 @@ describe("DEFAULT_READONLY_TOOLS compatibility", () => {
 
     // Spawn the henkey server briefly. It will load the tools config, print any
     // "not found in available tools" warnings to stderr, then block on stdio
-    // transport — so we kill it immediately after collecting stderr output.
+    // transport - so we kill it immediately after collecting stderr output.
     const result = spawnSync(
       process.execPath,
       [henkeyBin, "--tools-config", toolsFile],

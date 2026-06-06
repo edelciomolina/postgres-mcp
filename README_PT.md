@@ -31,7 +31,7 @@ Este pacote envolve o [@henkey/postgres-mcp-server](https://github.com/HenkDz/po
 ## 📋 Requisitos
 
 - ⚙️ Node.js >= 18
-- 📄 Um arquivo `.env` com as credenciais do banco de dados (em qualquer lugar na árvore do projeto — veja [Descoberta do .env](#-descoberta-do-arquivo-env))
+- 📄 Um arquivo `.env` com as credenciais do banco de dados (em qualquer lugar na árvore do projeto - veja [Descoberta do .env](#-descoberta-do-arquivo-env))
 
 ---
 
@@ -39,7 +39,7 @@ Este pacote envolve o [@henkey/postgres-mcp-server](https://github.com/HenkDz/po
 
 Existem três formas de usar este pacote. Escolha a que melhor se adapta ao seu fluxo de trabalho.
 
-### Opção 1 — Sem instalação (via `npx`, recomendado para início rápido)
+### Opção 1 - Sem instalação (via `npx`, recomendado para início rápido)
 
 Sem necessidade de instalação. O `npx` baixa e executa o pacote sob demanda. Adicione `-y` como primeiro argumento para pular a confirmação.
 
@@ -72,7 +72,7 @@ Sem necessidade de instalação. O `npx` baixa e executa o pacote sob demanda. A
 
 ---
 
-### Opção 2 — Instalar via VS Code (marketplace de extensões MCP)
+### Opção 2 - Instalar via VS Code (marketplace de extensões MCP)
 
 O VS Code suporta descoberta e instalação de servidores MCP diretamente no editor, sem usar o terminal.
 
@@ -80,7 +80,7 @@ O VS Code suporta descoberta e instalação de servidores MCP diretamente no edi
 2. Execute **`MCP: Add Server`**
 3. Escolha **"Browser MCP Servers"** (ou **"From registry"**, dependendo da sua versão do VS Code)
 4. Procure por **`postgres-mcp`** ou **`edelciomolina`**
-5. Selecione **Postgres MCP** e siga as instruções — o VS Code adicionará a entrada ao seu `mcp.json` automaticamente
+5. Selecione **Postgres MCP** e siga as instruções - o VS Code adicionará a entrada ao seu `mcp.json` automaticamente
 
 > 💡 Você também pode abrir o painel de Servidores MCP via **ícone do Copilot chat → Gerenciar Servidores MCP** para navegar, habilitar ou desabilitar servidores a qualquer momento.
 
@@ -144,7 +144,7 @@ O bloco `env` **não** contém as credenciais reais. Ele mapeia cada `MCP_KEY_*`
 | `MCP_KEY_USER`    | `DB_USER`                   | `readonly_user`          |
 | `MCP_KEY_PASS`    | `DB_PASS`                   | `segredo`                |
 
-Essa indireção permite que você use **qualquer nome de variável** no seu `.env` — útil quando compartilha um `.env` entre múltiplos serviços com convenções de nomenclatura diferentes.
+Essa indireção permite que você use **qualquer nome de variável** no seu `.env` - útil quando compartilha um `.env` entre múltiplos serviços com convenções de nomenclatura diferentes.
 
 ### 🔧 `args` - seleção de ferramentas via prefixo `tool=`
 
@@ -159,13 +159,13 @@ Cada ferramenta MCP habilitada é declarada como um argumento separado no format
 ]
 ```
 
-Isso torna a lista de ferramentas **explícita e auditável** diretamente no `mcp.json` — sem arquivos de configuração ocultos. 🔍
+Isso torna a lista de ferramentas **explícita e auditável** diretamente no `mcp.json` - sem arquivos de configuração ocultos. 🔍
 
 ---
 
 ## 🛡️ Por que somente leitura é o padrão
 
-Se você omitir todos os argumentos `tool=`, o servidor inicia com um **conjunto somente leitura curado** — todas as ferramentas que podem recuperar, analisar ou explicar dados, mas nada que possa modificá-los.
+Se você omitir todos os argumentos `tool=`, o servidor inicia com um **conjunto somente leitura curado** - todas as ferramentas que podem recuperar, analisar ou explicar dados, mas nada que possa modificá-los.
 
 **⚠️ Excluídas dos padrões (com capacidade de escrita):**
 
@@ -190,7 +190,7 @@ pg_manage_users        pg_analyze_database    pg_monitor_database
 pg_debug_database
 ```
 
-> 💡 `pg_execute_query` está incluída nos padrões, mas é **somente leitura aplicada pelo proxy**: o servidor intercepta qualquer instrução `INSERT`, `UPDATE`, `DELETE` ou DDL e retorna um erro de permissão antes de chegar ao banco de dados — sem necessidade de restrição no nível do banco para esta ferramenta.
+> 💡 `pg_execute_query` está incluída nos padrões, mas é **somente leitura aplicada pelo proxy**: o servidor intercepta qualquer instrução `INSERT`, `UPDATE`, `DELETE` ou DDL e retorna um erro de permissão antes de chegar ao banco de dados - sem necessidade de restrição no nível do banco para esta ferramenta.
 
 > 💡 **Dica:** Embora este MCP seja seguro e customizável via ferramentas, para máxima segurança, combine o conjunto padrão de ferramentas com um usuário de banco de dados que tenha apenas privilégios `SELECT`.
 
@@ -200,8 +200,8 @@ pg_debug_database
 
 O servidor resolve o arquivo `.env` nesta ordem:
 
-1. **Argumento `env-file=<caminho>`** — caminho explícito relativo ao `cwd`; tem prioridade sobre tudo
-2. **Busca ascendente** — a partir do `cwd`, pesquisa cada diretório pai até encontrar um `.env` ou atingir a raiz do sistema de arquivos
+1. **Argumento `env-file=<caminho>`** - caminho explícito relativo ao `cwd`; tem prioridade sobre tudo
+2. **Busca ascendente** - a partir do `cwd`, pesquisa cada diretório pai até encontrar um `.env` ou atingir a raiz do sistema de arquivos
 
 Se nenhum `.env` for encontrado, o servidor encerra com uma mensagem de erro clara.
 
@@ -248,7 +248,7 @@ Veja a lista completa de ferramentas disponíveis no servidor subjacente:
 
 ## 🏗️ Arquitetura
 
-Para uma visão detalhada do fluxo de comunicação entre o cliente MCP, o proxy e o PostgreSQL — incluindo o diagrama de sequência completo — consulte [ARCHITECT_PT.md](ARCHITECT_PT.md).
+Para uma visão detalhada do fluxo de comunicação entre o cliente MCP, o proxy e o PostgreSQL - incluindo o diagrama de sequência completo - consulte [ARCHITECT_PT.md](ARCHITECT_PT.md).
 
 ---
 

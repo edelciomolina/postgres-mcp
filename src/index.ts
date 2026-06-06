@@ -136,11 +136,11 @@ export const MCP_INSTRUCTIONS =
   '1. Always call pg_manage_schema(operation="get_info", tableName="<table>") before ' +
   "writing any query that references specific column names.\n" +
   "2. Never send multiple SQL statements separated by semicolons in a single " +
-  "pg_execute_query call — split each statement into a separate tool invocation.\n" +
+  "pg_execute_query call - split each statement into a separate tool invocation.\n" +
   '3. For row counts, prefer operation="count" over embedding SELECT COUNT inside a ' +
   "multi-statement query.\n" +
   "4. Permission boundaries: if a tool rejects an operation due to insufficient " +
-  "permissions, stop immediately and inform the user — do NOT attempt to work around " +
+  "permissions, stop immediately and inform the user - do NOT attempt to work around " +
   "the restriction via terminal commands, psql, reading .env files, or any other means. " +
   "Clearly state which tool was used, what permission it lacks, and what configuration " +
   "change would be needed to perform the operation.";

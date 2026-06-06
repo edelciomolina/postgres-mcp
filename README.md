@@ -31,7 +31,7 @@ This package wraps [@henkey/postgres-mcp-server](https://github.com/HenkDz/postg
 ## 📋 Requirements
 
 - ⚙️ Node.js >= 18
-- 📄 A `.env` file with the database credentials (anywhere in the project tree — see [.env discovery](#-env-file-discovery))
+- 📄 A `.env` file with the database credentials (anywhere in the project tree - see [.env discovery](#-env-file-discovery))
 
 ---
 
@@ -72,7 +72,7 @@ No installation required. `npx` downloads and runs the package on demand. Add `-
 
 ---
 
-### Option 2 — Install via VS Code (MCP extension marketplace)
+### Option 2 - Install via VS Code (MCP extension marketplace)
 
 VS Code supports discovering and installing MCP servers directly from the editor, without touching the terminal.
 
@@ -80,7 +80,7 @@ VS Code supports discovering and installing MCP servers directly from the editor
 2. Run **`MCP: Add Server`**
 3. Choose **"Browser MCP Servers"** (or **"From registry"**, depending on your VS Code version)
 4. Search for **`postgres-mcp`** or **`edelciomolina`**
-5. Select **Postgres MCP** and follow the prompts — VS Code will add the entry to your `mcp.json` automatically
+5. Select **Postgres MCP** and follow the prompts - VS Code will add the entry to your `mcp.json` automatically
 
 > 💡 You can also open the MCP Servers panel via the **Copilot chat icon → Manage MCP Servers** to browse, enable, or disable servers at any time.
 
@@ -190,7 +190,7 @@ pg_manage_users        pg_analyze_database    pg_monitor_database
 pg_debug_database
 ```
 
-> 💡 `pg_execute_query` is included in the defaults but is **proxy-enforced read-only**: the server intercepts any `INSERT`, `UPDATE`, `DELETE`, or DDL statement and returns a permission error before it reaches the database — no database-level restriction needed for this tool.
+> 💡 `pg_execute_query` is included in the defaults but is **proxy-enforced read-only**: the server intercepts any `INSERT`, `UPDATE`, `DELETE`, or DDL statement and returns a permission error before it reaches the database - no database-level restriction needed for this tool.
 
 > 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the default tool set with a database user that only has `SELECT` privileges.
 
@@ -200,8 +200,8 @@ pg_debug_database
 
 The server resolves the `.env` file in this order:
 
-1. **`env-file=<path>` arg** — explicit path relative to `cwd`; takes priority over everything else
-2. **Walk-up** — starting from `cwd`, searches each parent directory until a `.env` is found or the filesystem root is reached
+1. **`env-file=<path>` arg** - explicit path relative to `cwd`; takes priority over everything else
+2. **Walk-up** - starting from `cwd`, searches each parent directory until a `.env` is found or the filesystem root is reached
 
 If no `.env` is found, the server exits with a clear error message.
 
@@ -248,7 +248,7 @@ See the full list of available tools in the underlying server:
 
 ## 🏗️ Architecture
 
-For a deep dive into the communication flow between the MCP client, proxy, and PostgreSQL — including the full sequence diagram — see [ARCHITECT.md](ARCHITECT.md).
+For a deep dive into the communication flow between the MCP client, proxy, and PostgreSQL - including the full sequence diagram - see [ARCHITECT.md](ARCHITECT.md).
 
 ---
 

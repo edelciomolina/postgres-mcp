@@ -43,7 +43,7 @@ sequenceDiagram
     Proxy-->>Client: result { serverInfo, capabilities,<br/>instructions: MCP_INSTRUCTIONS }
 
     %% ── Schema check before query ─────────────────────────────────────
-    note over Client,PG: Fluxo correto — inspecionar schema antes de consultar
+    note over Client,PG: Fluxo correto - inspecionar schema antes de consultar
     Client->>Proxy: tools/call pg_manage_schema<br/>{ operation: "get_info", tableName: "users" }
     Proxy->>Child: tools/call pg_manage_schema (passthrough)
     Child->>PG: INFORMATION_SCHEMA query
@@ -61,7 +61,7 @@ sequenceDiagram
     Proxy-->>Client: result { rows }
 
     %% ── Multi-statement blocked ───────────────────────────────────────
-    note over Client,PG: Fluxo bloqueado — multi-statement rejeitado pelo proxy
+    note over Client,PG: Fluxo bloqueado - multi-statement rejeitado pelo proxy
     Client->>Proxy: tools/call pg_execute_query<br/>{ query: "SELECT COUNT(*) FROM users#59;<br/>  SELECT * FROM users" }
     Proxy->>Proxy: hasMultipleStatements(query)<br/>→ true 🚫
     note over Proxy: O processo filho nunca<br/>recebe esta mensagem
@@ -91,7 +91,7 @@ A resposta do `initialize` é a única mensagem que o proxy **modifica**. Ele ac
 - Usar `operation="count"` para contagem de linhas
 
 ### 3. Proteção contra multi-statement no caminho crítico
-Toda chamada `tools/call` para `pg_execute_query` é inspecionada antes de ser encaminhada. Se `hasMultipleStatements()` retornar `true`, o proxy retorna uma resposta de erro MCP diretamente — o processo filho nunca é envolvido. Literais de string contendo `;` são removidos antes da verificação para evitar falsos positivos (ex.: `WHERE name = 'a;b'`).
+Toda chamada `tools/call` para `pg_execute_query` é inspecionada antes de ser encaminhada. Se `hasMultipleStatements()` retornar `true`, o proxy retorna uma resposta de erro MCP diretamente - o processo filho nunca é envolvido. Literais de string contendo `;` são removidos antes da verificação para evitar falsos positivos (ex.: `WHERE name = 'a;b'`).
 
 ### 4. Isolamento de credenciais
 As credenciais nunca aparecem nos argumentos ou configurações de ferramentas MCP. Elas são resolvidas na inicialização a partir de um arquivo `.env`, codificadas em uma string de conexão e injetadas como `POSTGRES_CONNECTION_STRING` no ambiente do processo filho. Os nomes das chaves podem ser remapeados via variáveis de ambiente `MCP_KEY_*`, permitindo que o mesmo `.env` sirva múltiplos serviços sem duplicação.
