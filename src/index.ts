@@ -13,14 +13,15 @@ import { join, resolve } from "path";
 import { URL as NodeURL } from "url";
 
 // ---------------------------------------------------------------------------
-// Default read-only tools (no pg_execute_query / pg_execute_mutation / pg_execute_sql)
+// Default read-only tools (no pg_execute_mutation / pg_execute_sql)
 // Note: @henkey/postgres-mcp-server >=1.0.5 uses consolidated tools that bundle
 // multiple operations (read + write) under a single name. These defaults exclude
-// the raw SQL execution tools but still expose management tools whose read
-// operations cover the old individual tools (e.g. pg_get_schema_info is now
-// pg_manage_schema with operation="get_info").
+// write/DDL execution tools but include pg_execute_query (SELECT-only) and all
+// management tools whose read operations cover the old individual tools
+// (e.g. pg_get_schema_info is now pg_manage_schema with operation="get_info").
 // ---------------------------------------------------------------------------
 export const DEFAULT_READONLY_TOOLS = [
+  "pg_execute_query", // read-only SELECT execution (select / count / exists operations)
   "pg_manage_query", // explain, slow queries, query stats (was: pg_explain_query, pg_get_slow_queries, pg_get_query_stats)
   "pg_manage_schema", // schema info, enums (was: pg_get_schema_info, pg_get_enums)
   "pg_manage_indexes", // index info + usage analysis (was: pg_get_indexes, pg_analyze_index_usage)

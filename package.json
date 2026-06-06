@@ -1,6 +1,6 @@
 {
   "name": "@edelciomolina/postgres-mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "mcpName": "io.github.edelciomolina/postgres-mcp",
   "description": "MCP server wrapper for PostgreSQL - reads credentials from .env with configurable key mapping and safe read-only defaults.",
   "bin": {
