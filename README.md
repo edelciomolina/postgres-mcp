@@ -1,13 +1,16 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.png" width="96" alt="Postgres MCP icon"/>
-</p>
-
-# 🐘 Postgres MCP
-
-> 🔌 MCP server wrapper for PostgreSQL - reads credentials from `.env` at runtime with flexible key mapping, configurable tool selection, and **safe read-only defaults**.
-
-[![npm version](https://img.shields.io/npm/v/@edelciomolina/postgres-mcp)](https://www.npmjs.com/package/@edelciomolina/postgres-mcp)
-[![license](https://img.shields.io/npm/l/@edelciomolina/postgres-mcp)](./LICENSE.md)
+<table border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="110">
+      <img src="https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.png" width="96" alt="Postgres MCP icon"/>
+    </td>
+    <td>
+      <h1>🐘 Postgres MCP</h1>
+      <p>🔌 MCP server wrapper for PostgreSQL — reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
+      <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/v/@edelciomolina/postgres-mcp" alt="npm version"/></a>
+      <a href="./LICENSE.md"><img src="https://img.shields.io/npm/l/@edelciomolina/postgres-mcp" alt="license"/></a>
+    </td>
+  </tr>
+</table>
 
 ---
 
