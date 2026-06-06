@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Postgres MCP</h1>
-      <p>🔌 MCP server wrapper for PostgreSQL — reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
+      <p>🔌 MCP server wrapper for PostgreSQL - reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/v/@edelciomolina/postgres-mcp" alt="npm version"/></a>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/l/%40edelciomolina%2Fpostgres-mcp" alt="license"/></a>
       <a href="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
@@ -33,20 +33,110 @@ This package wraps [@henkey/postgres-mcp-server](https://github.com/HenkDz/postg
 
 ---
 
+## � Installation
+
+There are three ways to use this package. Choose the one that best fits your workflow.
+
+### Option 1 - No install (via `npx`, recommended for quick start)
+
+No installation required. `npx` downloads and runs the package on demand. Add `-y` as the first arg to skip the confirmation prompt.
+
+```json
+{
+  "servers": {
+    "Postgres Tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@edelciomolina/postgres-mcp",
+        "tool=pg_manage_query",
+        "tool=pg_manage_schema",
+        "tool=pg_manage_indexes",
+        "tool=pg_monitor_database"
+      ],
+      "env": {
+        "MCP_KEY_HOST":    "DB_HOST",
+        "MCP_KEY_PORT":    "DB_PORT",
+        "MCP_KEY_NAME":    "DB_NAME",
+        "MCP_KEY_SSLMODE": "DB_SSLMODE",
+        "MCP_KEY_USER":    "DB_USER",
+        "MCP_KEY_PASS":    "DB_PASS"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Option 2 - Local install (per project)
+
+Useful when you want to pin a specific version or avoid downloading on every MCP server start.
+
+```bash
+npm install --save-dev @edelciomolina/postgres-mcp
+```
+
+Then reference the local binary directly in `mcp.json`:
+
+```json
+{
+  "servers": {
+    "Postgres Tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "./node_modules/@edelciomolina/postgres-mcp/dist/index.js",
+        "tool=pg_manage_query",
+        "tool=pg_manage_schema",
+        "tool=pg_manage_indexes",
+        "tool=pg_monitor_database"
+      ],
+      "env": {
+        "MCP_KEY_HOST":    "DB_HOST",
+        "MCP_KEY_PORT":    "DB_PORT",
+        "MCP_KEY_NAME":    "DB_NAME",
+        "MCP_KEY_SSLMODE": "DB_SSLMODE",
+        "MCP_KEY_USER":    "DB_USER",
+        "MCP_KEY_PASS":    "DB_PASS"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Option 3 — Install via VS Code (MCP extension marketplace)
+
+VS Code supports discovering and installing MCP servers directly from the editor, without touching the terminal.
+
+1. Open the **Command Palette** (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on Mac / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on Windows/Linux)
+2. Run **`MCP: Add Server`**
+3. Choose **"Browser MCP Servers"** (or **"From registry"**, depending on your VS Code version)
+4. Search for **`postgres-mcp`** or **`edelciomolina`**
+5. Select **Postgres MCP** and follow the prompts — VS Code will add the entry to your `mcp.json` automatically
+
+> 💡 You can also open the MCP Servers panel via the **Copilot chat icon → Manage MCP Servers** to browse, enable, or disable servers at any time.
+
+After installing, edit the generated entry in `.vscode/mcp.json` to add your `tool=` args and `env` key mappings as shown in the [Usage](#-usage-in-vs-code-mcpjson) section below.
+
+---
+
 ## 🚀 Usage in VS Code (`mcp.json`)
 
 ```json
 {
   "servers": {
-    "Postgres": {
+    "Postgres Tools": {
       "type": "stdio",
       "command": "npx",
       "args": [
         "@edelciomolina/postgres-mcp",
-        "tool=pg_explain_query",
-        "tool=pg_get_schema_info",
-        "tool=pg_get_indexes",
-        "tool=pg_get_slow_queries",
+        "tool=pg_manage_query",
+        "tool=pg_manage_schema",
+        "tool=pg_manage_indexes",
         "tool=pg_monitor_database"
       ],
       "env": {
@@ -99,8 +189,8 @@ Each enabled MCP tool is declared as a separate arg using the `tool=<name>` form
 ```json
 "args": [
   "npx @edelciomolina/postgres-mcp",
-  "tool=pg_get_schema_info",
-  "tool=pg_get_indexes"
+  "tool=pg_manage_schema",
+  "tool=pg_manage_indexes"
 ]
 ```
 
@@ -116,18 +206,23 @@ If you omit all `tool=` args, the server starts with a **curated read-only set**
 
 | Tool | Risk |
 |------|------|
-| `pg_execute_query` | Runs arbitrary SQL - including `INSERT`, `UPDATE`, `DELETE`, `DROP` |
-| `pg_manage_query`  | Executes saved queries - can include mutations |
+| `pg_execute_query`          | Runs arbitrary SQL — including `INSERT`, `UPDATE`, `DELETE`, `DROP` |
+| `pg_execute_mutation`       | Explicit DML mutations |
+| `pg_execute_sql`            | Runs arbitrary SQL commands |
+| `pg_import_table_data`      | Writes/imports data into tables |
+| `pg_copy_between_databases` | Copies data between databases |
+| `pg_export_table_data`      | Exports table data |
+| `pg_manage_comments`        | Adds or modifies database object comments |
 
-**✅ Included in defaults (safe read-only):**
+**✅ Included in defaults:**
+
+> ⚠️ Since `@henkey/postgres-mcp-server` >=1.0.5 uses **consolidated tools**, each default tool bundles both read and write sub-operations (e.g. `pg_manage_schema` covers both `get_info` and `create_table`). True write-prevention requires a read-only database user.
 
 ```
-pg_explain_query       pg_get_schema_info     pg_get_indexes
-pg_get_constraints     pg_get_functions       pg_get_triggers
-pg_get_rls_policies    pg_get_enums           pg_get_setup_instructions
-pg_get_slow_queries    pg_get_query_stats     pg_get_user_permissions
-pg_analyze_database    pg_analyze_index_usage pg_monitor_database
-pg_debug_database
+pg_manage_query        pg_manage_schema       pg_manage_indexes
+pg_manage_constraints  pg_manage_functions    pg_manage_triggers
+pg_manage_rls          pg_get_setup_instructions pg_manage_users
+pg_analyze_database    pg_monitor_database    pg_debug_database
 ```
 
 > 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the read-only tool set with a database user that only has `SELECT` privileges.

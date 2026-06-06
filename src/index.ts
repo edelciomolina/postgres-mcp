@@ -13,23 +13,24 @@ import { join, resolve } from "path";
 import { URL as NodeURL } from "url";
 
 // ---------------------------------------------------------------------------
-// Default read-only tools (no pg_execute_query / pg_manage_query)
+// Default read-only tools (no pg_execute_query / pg_execute_mutation / pg_execute_sql)
+// Note: @henkey/postgres-mcp-server >=1.0.5 uses consolidated tools that bundle
+// multiple operations (read + write) under a single name. These defaults exclude
+// the raw SQL execution tools but still expose management tools whose read
+// operations cover the old individual tools (e.g. pg_get_schema_info is now
+// pg_manage_schema with operation="get_info").
 // ---------------------------------------------------------------------------
 const DEFAULT_READONLY_TOOLS = [
-  "pg_explain_query",
-  "pg_get_schema_info",
-  "pg_get_indexes",
-  "pg_get_constraints",
-  "pg_get_functions",
-  "pg_get_triggers",
-  "pg_get_rls_policies",
-  "pg_get_enums",
+  "pg_manage_query", // explain, slow queries, query stats (was: pg_explain_query, pg_get_slow_queries, pg_get_query_stats)
+  "pg_manage_schema", // schema info, enums (was: pg_get_schema_info, pg_get_enums)
+  "pg_manage_indexes", // index info + usage analysis (was: pg_get_indexes, pg_analyze_index_usage)
+  "pg_manage_constraints", // constraint info (was: pg_get_constraints)
+  "pg_manage_functions", // function info (was: pg_get_functions)
+  "pg_manage_triggers", // trigger info (was: pg_get_triggers)
+  "pg_manage_rls", // RLS policy info (was: pg_get_rls_policies)
   "pg_get_setup_instructions",
-  "pg_get_slow_queries",
-  "pg_get_query_stats",
-  "pg_get_user_permissions",
+  "pg_manage_users", // user permissions info (was: pg_get_user_permissions)
   "pg_analyze_database",
-  "pg_analyze_index_usage",
   "pg_monitor_database",
   "pg_debug_database"
 ];
