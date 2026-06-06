@@ -37,7 +37,7 @@ const DEFAULT_READONLY_TOOLS = [
 // ---------------------------------------------------------------------------
 // .env reader
 // ---------------------------------------------------------------------------
-function loadEnvFile(envPath: string): Record<string, string> {
+export function loadEnvFile(envPath: string): Record<string, string> {
   if (!existsSync(envPath)) {
     throw new Error(`.env file not found at: ${envPath}`);
   }
@@ -61,7 +61,7 @@ function loadEnvFile(envPath: string): Record<string, string> {
 // ---------------------------------------------------------------------------
 // Resolve credential from .env using MCP_KEY_* mapping
 // ---------------------------------------------------------------------------
-function resolveCredential(
+export function resolveCredential(
   envVars: Record<string, string>,
   dotenv: Record<string, string>,
   mcpKey: string,
@@ -75,7 +75,7 @@ function resolveCredential(
 // ---------------------------------------------------------------------------
 // Build PostgreSQL connection string with URL-encoded password
 // ---------------------------------------------------------------------------
-function buildConnectionString(creds: {
+export function buildConnectionString(creds: {
   host: string;
   port: string;
   name: string;
@@ -173,4 +173,7 @@ function main(): void {
   }
 }
 
-main();
+// Only run main when this file is executed directly (not imported by tests)
+if (require.main === module) {
+  main();
+}
