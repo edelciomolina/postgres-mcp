@@ -9,17 +9,17 @@
   },
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.svg",
-      "mimeType": "image/svg+xml",
-      "sizes": ["any"]
+      "src": "https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
     }
   ],
-  "version": "1.0.3",
+  "version": "1.0.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@edelciomolina/postgres-mcp",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "transport": {
         "type": "stdio"
       },
