@@ -1,0 +1,43 @@
+{
+  "name": "@edelciomolina/postgres-mcp",
+  "version": "1.0.0",
+  "description": "MCP server wrapper for PostgreSQL - reads credentials from .env with configurable key mapping and safe read-only defaults.",
+  "bin": {
+    "postgres-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@henkey/postgres-mcp-server": "^1.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Edelcio Molina <https://github.com/edelciomolina>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edelciomolina/postgres-mcp.git"
+  },
+  "homepage": "https://github.com/edelciomolina/postgres-mcp#readme",
+  "keywords": [
+    "mcp",
+    "postgresql",
+    "postgres",
+    "database",
+    "model-context-protocol",
+    "copilot",
+    "ai",
+    "vscode"
+  ]
+}
