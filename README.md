@@ -3,7 +3,7 @@
 > 🔌 MCP server wrapper for PostgreSQL - reads credentials from `.env` at runtime with flexible key mapping, configurable tool selection, and **safe read-only defaults**.
 
 [![npm version](https://img.shields.io/npm/v/@edelciomolina/postgres-mcp)](https://www.npmjs.com/package/@edelciomolina/postgres-mcp)
-[![license](https://img.shields.io/npm/l/@edelciomolina/postgres-mcp)](./LICENSE)
+[![license](https://img.shields.io/npm/l/@edelciomolina/postgres-mcp)](./LICENSE.md)
 
 ---
 
