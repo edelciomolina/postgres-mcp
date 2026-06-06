@@ -7,7 +7,7 @@
     </td>
     <td>
       <h1>Postgres MCP</h1>
-      <p>🔌 MCP server wrapper for PostgreSQL - reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
+      <p>🔌 Native MCP server for PostgreSQL - reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/v/@edelciomolina/postgres-mcp" alt="npm version"/></a>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/l/%40edelciomolina%2Fpostgres-mcp" alt="license"/></a>
       <a href="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
@@ -19,7 +19,7 @@
 
 ## ✨ What it does
 
-This package wraps [@henkey/postgres-mcp-server](https://github.com/HenkDz/postgresql-mcp-server) and adds:
+This is a **native MCP server** built directly with [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) and [`pg`](https://www.npmjs.com/package/pg) (node-postgres). It provides:
 
 - 🔐 **Runtime credential resolution** - reads database credentials from your `.env` file at startup, so no secrets are stored in `mcp.json`
 - 🗝️ **Flexible key mapping** - use any `.env` variable names; tell the server which ones to use via `env` in `mcp.json`
@@ -37,7 +37,7 @@ This package wraps [@henkey/postgres-mcp-server](https://github.com/HenkDz/postg
 
 ## � Installation
 
-There are three ways to use this package. Choose the one that best fits your workflow.
+There are two ways to use this package. Choose the one that best fits your workflow.
 
 ### Option 1 - No install (via `npx`, recommended for quick start)
 
@@ -167,20 +167,14 @@ This makes the tool list **explicit and auditable** directly in `mcp.json` - no 
 
 If you omit all `tool=` args, the server starts with a **curated read-only set** - every tool that can retrieve, analyze, or explain data, but nothing that can modify it.
 
-**⚠️ Excluded from defaults (write-capable):**
+**⚠️ Excluded from defaults (write-capable, opt-in via `tool=` arg):**
 
 | Tool | Risk |
 |------|------|
-| `pg_execute_mutation`       | Explicit DML mutations |
-| `pg_execute_sql`            | Runs arbitrary SQL commands |
-| `pg_import_table_data`      | Writes/imports data into tables |
-| `pg_copy_between_databases` | Copies data between databases |
-| `pg_export_table_data`      | Exports table data |
-| `pg_manage_comments`        | Adds or modifies database object comments |
+| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT operations |
+| `pg_execute_sql`      | Executes arbitrary SQL with optional transaction support |
 
 **✅ Included in defaults:**
-
-> ⚠️ Since `@henkey/postgres-mcp-server` >=1.0.5 uses **consolidated tools**, each default tool bundles both read and write sub-operations (e.g. `pg_manage_schema` covers both `get_info` and `create_table`). True write-prevention requires a read-only database user.
 
 ```
 pg_execute_query       pg_manage_query        pg_manage_schema
@@ -190,7 +184,9 @@ pg_manage_users        pg_analyze_database    pg_monitor_database
 pg_debug_database
 ```
 
-> 💡 `pg_execute_query` is included in the defaults but is **proxy-enforced read-only**: the server intercepts any `INSERT`, `UPDATE`, `DELETE`, or DDL statement and returns a permission error before it reaches the database - no database-level restriction needed for this tool.
+> 💡 `pg_execute_query` is included in the defaults but is **handler-enforced read-only**: the tool handler rejects any `INSERT`, `UPDATE`, `DELETE`, or DDL statement and returns a permission error before the database is contacted.
+
+> ⚠️ Management tools like `pg_manage_schema` bundle both read and write sub-operations (e.g. `get_info` and `create_table`). For strict write prevention, pair with a database user that only has `SELECT` privileges.
 
 > 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the default tool set with a database user that only has `SELECT` privileges.
 
@@ -241,8 +237,30 @@ When VS Code starts the MCP process, `cwd` is typically the workspace root. If y
 
 ## 🧰 Available tools
 
-See the full list of available tools in the underlying server:  
-📦 [@henkey/postgres-mcp-server](https://github.com/HenkDz/postgresql-mcp-server)
+### Read-only (enabled by default)
+
+| Tool | Description |
+|------|-------------|
+| `pg_execute_query` | SELECT / COUNT / EXISTS with multi-statement and write-op guards |
+| `pg_manage_query` | EXPLAIN plans, slow query analysis, `pg_stat_statements` |
+| `pg_manage_schema` | Schema info, create/alter tables, manage ENUMs |
+| `pg_manage_indexes` | Get, create, drop, reindex, analyze index usage |
+| `pg_manage_constraints` | Get, create, and drop constraints and foreign keys |
+| `pg_manage_functions` | Get, create, and drop functions/procedures |
+| `pg_manage_triggers` | Get, create, drop, enable/disable triggers |
+| `pg_manage_rls` | Row-Level Security policies |
+| `pg_get_setup_instructions` | Platform-specific PostgreSQL setup instructions |
+| `pg_manage_users` | User permissions, create/drop/alter users, grant/revoke |
+| `pg_analyze_database` | Performance, configuration, and storage analysis |
+| `pg_monitor_database` | Real-time connection, query, lock, and replication monitoring |
+| `pg_debug_database` | Diagnose connections, locks, performance, and replication |
+
+### Write-capable (opt-in via `tool=` arg)
+
+| Tool | Description |
+|------|-------------|
+| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT with parameterized queries |
+| `pg_execute_sql` | Arbitrary SQL execution with optional transaction support |
 
 ---
 

@@ -17,10 +17,13 @@
     "status:mcp": "curl -s \"https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.edelciomolina/postgres-mcp\" | python3 -m json.tool"
   },
   "dependencies": {
-    "@henkey/postgres-mcp-server": "^1.0.5"
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "pg": "^8.13.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.42",
+    "@types/pg": "^8.20.0",
     "typescript": "^5.0.0"
   },
   "engines": {

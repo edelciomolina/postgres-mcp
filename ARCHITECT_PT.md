@@ -6,13 +6,14 @@ Este documento descreve o fluxo de comunicação entre um cliente MCP e o Postgr
 
 ## Visão Geral
 
-O `@edelciomolina/postgres-mcp` é um **proxy wrapper** que fica entre o cliente MCP e o `@henkey/postgres-mcp-server` subjacente. Ele adiciona três responsabilidades que o servidor filho não trata:
+O `@edelciomolina/postgres-mcp` é um **servidor MCP nativo** construído com [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) e [`pg`](https://www.npmjs.com/package/pg) (node-postgres). Não há processo filho ou proxy NDJSON — o protocolo MCP e a conectividade com o banco de dados são tratados diretamente.
 
 | Responsabilidade | Quando |
 |---|---|
 | Resolução de credenciais do `.env` com mapeamento configurável de chaves | Inicialização |
-| Injeção de instruções no handshake MCP | Resposta do `initialize` |
-| Proteção contra consultas multi-statement | Toda chamada a `pg_execute_query` |
+| Instruções entregues ao cliente | Resposta do `initialize` (via opção do construtor do SDK) |
+| Proteção contra multi-statement e operações de escrita | Dentro do handler `pg_execute_query` |
+| Filtragem de ferramentas | Registro seletivo de ferramentas na inicialização |
 
 ---
 
@@ -21,80 +22,77 @@ O `@edelciomolina/postgres-mcp` é um **proxy wrapper** que fica entre o cliente
 ```mermaid
 sequenceDiagram
     actor Client as Cliente MCP<br/>(VS Code / Copilot)
-    participant Proxy as postgres-mcp<br/>(Proxy Wrapper)
-    participant Child as @henkey/postgres-mcp-server<br/>(Processo Filho)
+    participant Server as postgres-mcp<br/>(McpServer)
+    participant Pool as pg.Pool
     participant PG as PostgreSQL
 
     %% ── Boot ──────────────────────────────────────────────────────────
-    note over Proxy: Inicialização
-    Proxy->>Proxy: findEnvFile(cwd)
-    Proxy->>Proxy: loadEnvFile(path)
-    Proxy->>Proxy: resolveCredential × 6<br/>MCP_KEY_* → valor do .env
-    Proxy->>Proxy: buildConnectionString<br/>(URL-encode user + pass)
-    Proxy->>Proxy: writeFileSync(tempFile)<br/>{ enabledTools: DEFAULT_READONLY_TOOLS }
-    Proxy->>Child: spawn()<br/>env: POSTGRES_CONNECTION_STRING
+    note over Server: Inicialização
+    Server->>Server: findEnvFile(cwd)
+    Server->>Server: loadEnvFile(path)
+    Server->>Server: resolveCredential × 6<br/>MCP_KEY_* → valor do .env
+    Server->>Server: buildConnectionString<br/>(URL-encode user + pass)
+    Server->>Pool: new Pool({ connectionString })
+    Server->>Server: registerTools(server, pool, enabledTools)
+    Server->>Server: connect(StdioServerTransport)
 
     %% ── Handshake ─────────────────────────────────────────────────────
     note over Client,PG: Handshake
-    Client->>Proxy: initialize { clientInfo, capabilities }
-    Proxy->>Child: initialize (passthrough)
-    Child-->>Proxy: result { serverInfo, capabilities }
-    note over Proxy: Detecta result.serverInfo<br/>→ injeta MCP_INSTRUCTIONS
-    Proxy-->>Client: result { serverInfo, capabilities,<br/>instructions: MCP_INSTRUCTIONS }
+    Client->>Server: initialize { clientInfo, capabilities }
+    note over Server: SDK injeta MCP_INSTRUCTIONS<br/>a partir das opções do construtor
+    Server-->>Client: result { serverInfo, capabilities,<br/>instructions: MCP_INSTRUCTIONS }
 
     %% ── Schema check before query ─────────────────────────────────────
     note over Client,PG: Fluxo correto - inspecionar schema antes de consultar
-    Client->>Proxy: tools/call pg_manage_schema<br/>{ operation: "get_info", tableName: "users" }
-    Proxy->>Child: tools/call pg_manage_schema (passthrough)
-    Child->>PG: INFORMATION_SCHEMA query
-    PG-->>Child: columns, types, constraints
-    Child-->>Proxy: result { columns: [uid, display_name, ...] }
-    Proxy-->>Client: result { columns: [uid, display_name, ...] }
+    Client->>Server: tools/call pg_manage_schema<br/>{ operation: "get_info", tableName: "users" }
+    Server->>Pool: pool.connect()
+    Pool->>PG: query information_schema.columns
+    PG-->>Pool: colunas, tipos, constraints
+    Pool-->>Server: linhas de resultado
+    Server-->>Client: result { columns: [uid, display_name, ...] }
 
     %% ── Valid single query ────────────────────────────────────────────
-    Client->>Proxy: tools/call pg_execute_query<br/>{ operation: "select",<br/>  query: "SELECT uid, display_name FROM users" }
-    Proxy->>Proxy: hasMultipleStatements(query)<br/>→ false ✅
-    Proxy->>Child: tools/call pg_execute_query (passthrough)
-    Child->>PG: SELECT uid, display_name FROM users
-    PG-->>Child: rows[]
-    Child-->>Proxy: result { rows }
-    Proxy-->>Client: result { rows }
+    Client->>Server: tools/call pg_execute_query<br/>{ operation: "select",<br/>  query: "SELECT uid, display_name FROM users" }
+    Server->>Server: hasMultipleStatements(query) → false ✅
+    Server->>Server: isWriteOperation(query) → false ✅
+    Server->>Pool: pool.connect()
+    Pool->>PG: SELECT uid, display_name FROM users
+    PG-->>Pool: rows[]
+    Pool-->>Server: linhas de resultado
+    Server-->>Client: result { rowCount, rows }
 
     %% ── Multi-statement blocked ───────────────────────────────────────
-    note over Client,PG: Fluxo bloqueado - multi-statement rejeitado pelo proxy
-    Client->>Proxy: tools/call pg_execute_query<br/>{ query: "SELECT COUNT(*) FROM users#59;<br/>  SELECT * FROM users" }
-    Proxy->>Proxy: hasMultipleStatements(query)<br/>→ true 🚫
-    note over Proxy: O processo filho nunca<br/>recebe esta mensagem
-    Proxy-->>Client: result { isError: true,<br/>"Consultas multi-statement não são permitidas.<br/>Divida em chamadas separadas." }
+    note over Client,PG: Fluxo bloqueado - multi-statement rejeitado pelo handler
+    Client->>Server: tools/call pg_execute_query<br/>{ query: "SELECT COUNT(*) FROM users#59;<br/>  SELECT * FROM users" }
+    Server->>Server: hasMultipleStatements(query) → true 🚫
+    note over Server: Banco de dados nunca é consultado
+    Server-->>Client: result { isError: true,<br/>"Consultas multi-statement não são permitidas.<br/>Divida em chamadas separadas." }
 
-    %% ── Correct count ─────────────────────────────────────────────────
-    Client->>Proxy: tools/call pg_execute_query<br/>{ operation: "count",<br/>  query: "SELECT COUNT(*) FROM users" }
-    Proxy->>Proxy: hasMultipleStatements(query)<br/>→ false ✅
-    Proxy->>Child: tools/call pg_execute_query (passthrough)
-    Child->>PG: SELECT COUNT(*) FROM users
-    PG-->>Child: [{ count: 1 }]
-    Child-->>Proxy: result { rows }
-    Proxy-->>Client: result { rows }
+    %% ── Unregistered tool ─────────────────────────────────────────────
+    note over Client,PG: Fluxo bloqueado - ferramenta de escrita não registrada
+    Client->>Server: tools/call pg_execute_mutation { ... }
+    note over Server: Ferramenta nunca foi registrada<br/>(não está em enabledTools)
+    Server-->>Client: error "Tool not found"
 ```
 
 ---
 
 ## Decisões de design
 
-### 1. Proxy ao invés de fork
-O wrapper inicializa o processo filho com `stdio: ["pipe", "pipe", "inherit"]`, dando controle total sobre stdin/stdout enquanto deixa o stderr fluir diretamente para o terminal. Isso permite a interceptação sem reimplementar o protocolo MCP.
+### 1. Servidor MCP nativo
+O servidor usa a classe `McpServer` do `@modelcontextprotocol/sdk` com `StdioServerTransport`. Não há processo filho ou proxy NDJSON. O protocolo MCP é tratado nativamente pelo SDK, mantendo o código simples e eliminando uma dependência de execução.
 
-### 2. Instruções injetadas no handshake
-A resposta do `initialize` é a única mensagem que o proxy **modifica**. Ele acrescenta `MCP_INSTRUCTIONS` em `result.instructions`, que o cliente lê uma vez na inicialização. Isso orienta o modelo a:
-- Sempre chamar `pg_manage_schema` antes de referenciar nomes de colunas
-- Nunca enviar múltiplas instruções SQL em uma única chamada `pg_execute_query`
-- Usar `operation="count"` para contagem de linhas
+### 2. Instruções via construtor do SDK
+`MCP_INSTRUCTIONS` é passado para `new McpServer({ name, version }, { instructions })`. O SDK o injeta na resposta do `initialize` automaticamente — sem necessidade de interceptar mensagens ou fazer patch manual em JSON.
 
-### 3. Proteção contra multi-statement no caminho crítico
-Toda chamada `tools/call` para `pg_execute_query` é inspecionada antes de ser encaminhada. Se `hasMultipleStatements()` retornar `true`, o proxy retorna uma resposta de erro MCP diretamente - o processo filho nunca é envolvido. Literais de string contendo `;` são removidos antes da verificação para evitar falsos positivos (ex.: `WHERE name = 'a;b'`).
+### 3. Guards dentro dos handlers das tools
+As verificações de multi-statement (`hasMultipleStatements`) e de operação de escrita (`isWriteOperation`) ficam dentro da função handler de `pg_execute_query`. Se alguma delas falhar, o handler retorna um resultado de erro imediatamente — o banco de dados nunca é consultado e não é necessária nenhuma camada extra de interceptação.
 
-### 4. Isolamento de credenciais
-As credenciais nunca aparecem nos argumentos ou configurações de ferramentas MCP. Elas são resolvidas na inicialização a partir de um arquivo `.env`, codificadas em uma string de conexão e injetadas como `POSTGRES_CONNECTION_STRING` no ambiente do processo filho. Os nomes das chaves podem ser remapeados via variáveis de ambiente `MCP_KEY_*`, permitindo que o mesmo `.env` sirva múltiplos serviços sem duplicação.
+### 4. Registro seletivo de ferramentas
+Apenas as ferramentas presentes em `enabledTools` são registradas no `McpServer` durante a inicialização. Chamar uma ferramenta não registrada retorna o erro padrão "tool not found" do SDK. Não há guard de ferramentas desabilitadas em tempo de execução; a filtragem ocorre uma única vez, na inicialização.
 
-### 5. Somente leitura por padrão
-`DEFAULT_READONLY_TOOLS` omite todas as ferramentas de escrita/DDL (`pg_execute_mutation`, `pg_execute_sql`). O acesso de escrita requer a passagem explícita de argumentos `tool=<nome>` na inicialização.
+### 5. Isolamento de credenciais
+As credenciais nunca aparecem nos argumentos das tools MCP ou nas mensagens MCP. Elas são resolvidas na inicialização a partir de um arquivo `.env`, codificadas em URL em uma connection string e passadas para uma instância de `pg.Pool`. Os nomes das chaves podem ser remapeados via variáveis de ambiente `MCP_KEY_*`, permitindo que o mesmo `.env` sirva múltiplos serviços sem duplicação.
+
+### 6. Somente leitura por padrão
+`DEFAULT_READONLY_TOOLS` omite as ferramentas de escrita (`pg_execute_mutation`, `pg_execute_sql`). O acesso de escrita requer a passagem explícita de argumentos `tool=<nome>` na inicialização.

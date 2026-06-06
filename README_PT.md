@@ -7,7 +7,7 @@
     </td>
     <td>
       <h1>Postgres MCP</h1>
-      <p>🔌 Servidor MCP para PostgreSQL - lê credenciais do <code>.env</code> em tempo de execução com mapeamento de chaves flexível, seleção configurável de ferramentas e <strong>modo somente leitura por padrão</strong>.</p>
+      <p>🔌 Servidor MCP nativo para PostgreSQL - lê credenciais do <code>.env</code> em tempo de execução com mapeamento de chaves flexível, seleção configurável de ferramentas e <strong>modo somente leitura por padrão</strong>.</p>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/v/@edelciomolina/postgres-mcp" alt="versão npm"/></a>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/l/%40edelciomolina%2Fpostgres-mcp" alt="licença"/></a>
       <a href="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
@@ -19,7 +19,7 @@
 
 ## ✨ O que faz
 
-Este pacote envolve o [@henkey/postgres-mcp-server](https://github.com/HenkDz/postgresql-mcp-server) e adiciona:
+Este é um **servidor MCP nativo** construído diretamente com [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) e [`pg`](https://www.npmjs.com/package/pg) (node-postgres). Ele oferece:
 
 - 🔐 **Resolução de credenciais em tempo de execução** - lê as credenciais do banco de dados do seu arquivo `.env` na inicialização, sem armazenar segredos no `mcp.json`
 - 🗝️ **Mapeamento de chaves flexível** - use quaisquer nomes de variáveis no `.env`; indique ao servidor quais usar via `env` no `mcp.json`
@@ -37,7 +37,7 @@ Este pacote envolve o [@henkey/postgres-mcp-server](https://github.com/HenkDz/po
 
 ## 🚀 Instalação
 
-Existem três formas de usar este pacote. Escolha a que melhor se adapta ao seu fluxo de trabalho.
+Existem duas formas de usar este pacote. Escolha a que melhor se adapta ao seu fluxo de trabalho.
 
 ### Opção 1 - Sem instalação (via `npx`, recomendado para início rápido)
 
@@ -167,20 +167,14 @@ Isso torna a lista de ferramentas **explícita e auditável** diretamente no `mc
 
 Se você omitir todos os argumentos `tool=`, o servidor inicia com um **conjunto somente leitura curado** - todas as ferramentas que podem recuperar, analisar ou explicar dados, mas nada que possa modificá-los.
 
-**⚠️ Excluídas dos padrões (com capacidade de escrita):**
+**⚠️ Excluídas dos padrões (com capacidade de escrita, opt-in via argumento `tool=`):**
 
 | Ferramenta | Risco |
 |------------|-------|
-| `pg_execute_mutation`       | Mutações DML explícitas |
-| `pg_execute_sql`            | Executa comandos SQL arbitrários |
-| `pg_import_table_data`      | Escreve/importa dados em tabelas |
-| `pg_copy_between_databases` | Copia dados entre bancos de dados |
-| `pg_export_table_data`      | Exporta dados de tabelas |
-| `pg_manage_comments`        | Adiciona ou modifica comentários em objetos do banco |
+| `pg_execute_mutation` | Operações INSERT / UPDATE / DELETE / UPSERT |
+| `pg_execute_sql`      | Executa SQL arbitrário com suporte opcional a transações |
 
 **✅ Incluídas nos padrões:**
-
-> ⚠️ Desde o `@henkey/postgres-mcp-server` >=1.0.5, são usadas **ferramentas consolidadas**, onde cada ferramenta padrão agrupa suboperações de leitura e escrita (ex.: `pg_manage_schema` cobre tanto `get_info` quanto `create_table`). A verdadeira prevenção de escrita requer um usuário de banco de dados somente leitura.
 
 ```
 pg_execute_query       pg_manage_query        pg_manage_schema
@@ -190,7 +184,9 @@ pg_manage_users        pg_analyze_database    pg_monitor_database
 pg_debug_database
 ```
 
-> 💡 `pg_execute_query` está incluída nos padrões, mas é **somente leitura aplicada pelo proxy**: o servidor intercepta qualquer instrução `INSERT`, `UPDATE`, `DELETE` ou DDL e retorna um erro de permissão antes de chegar ao banco de dados - sem necessidade de restrição no nível do banco para esta ferramenta.
+> 💡 `pg_execute_query` está incluída nos padrões, mas é **somente leitura aplicada pelo handler**: o próprio handler da ferramenta rejeita qualquer instrução `INSERT`, `UPDATE`, `DELETE` ou DDL e retorna um erro de permissão antes de o banco de dados ser consultado.
+
+> ⚠️ Ferramentas de gestão como `pg_manage_schema` agrupam suboperações de leitura e escrita (ex.: `get_info` e `create_table`). Para prevenção estrita de escrita, combine com um usuário de banco de dados que tenha apenas privilégios `SELECT`.
 
 > 💡 **Dica:** Embora este MCP seja seguro e customizável via ferramentas, para máxima segurança, combine o conjunto padrão de ferramentas com um usuário de banco de dados que tenha apenas privilégios `SELECT`.
 
@@ -241,8 +237,30 @@ Quando o VS Code inicia o processo MCP, o `cwd` é tipicamente a raiz do workspa
 
 ## 🧰 Ferramentas disponíveis
 
-Veja a lista completa de ferramentas disponíveis no servidor subjacente:  
-📦 [@henkey/postgres-mcp-server](https://github.com/HenkDz/postgresql-mcp-server)
+### Somente leitura (habilitadas por padrão)
+
+| Ferramenta | Descrição |
+|------------|----------|
+| `pg_execute_query` | SELECT / COUNT / EXISTS com guards de multi-statement e escrita |
+| `pg_manage_query` | Planos EXPLAIN, análise de queries lentas, `pg_stat_statements` |
+| `pg_manage_schema` | Info de schema, criar/alterar tabelas, gerenciar ENUMs |
+| `pg_manage_indexes` | Listar, criar, remover, reindexar, analisar uso de índices |
+| `pg_manage_constraints` | Listar, criar e remover constraints e chaves estrangeiras |
+| `pg_manage_functions` | Listar, criar e remover funções e procedures |
+| `pg_manage_triggers` | Listar, criar, remover, habilitar/desabilitar triggers |
+| `pg_manage_rls` | Políticas de Row-Level Security |
+| `pg_get_setup_instructions` | Instruções de configuração por plataforma |
+| `pg_manage_users` | Permissões de usuários, criar/remover/alterar usuários, grant/revoke |
+| `pg_analyze_database` | Análise de performance, configuração e armazenamento |
+| `pg_monitor_database` | Monitoramento em tempo real de conexões, queries, locks e replicação |
+| `pg_debug_database` | Diagnosticar conexões, locks, performance e replicação |
+
+### Com capacidade de escrita (opt-in via argumento `tool=`)
+
+| Ferramenta | Descrição |
+|------------|----------|
+| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT com queries parametrizadas |
+| `pg_execute_sql` | Execução de SQL arbitrário com suporte opcional a transações |
 
 ---
 
