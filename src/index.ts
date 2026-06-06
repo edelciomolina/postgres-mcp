@@ -6,7 +6,7 @@
  * Author: Edelcio Molina <https://github.com/edelciomolina>
  */
 
-import { execFileSync } from "child_process";
+import { spawn } from "child_process";
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
@@ -105,6 +105,49 @@ export function findEnvFile(startDir: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-statement query guard
+// ---------------------------------------------------------------------------
+export function hasMultipleStatements(query: string): boolean {
+  // Strip single-quoted string literals to avoid false positives (e.g. WHERE col = 'a;b')
+  const stripped = query.replace(/'(?:[^'\\]|\\.)*'/g, "''");
+  const withoutTrailing = stripped.trim().replace(/;+\s*$/, "");
+  return withoutTrailing.includes(";");
+}
+
+// ---------------------------------------------------------------------------
+// Instructions injected into the MCP initialize response
+// ---------------------------------------------------------------------------
+export const MCP_INSTRUCTIONS =
+  "PostgreSQL query rules:\n" +
+  '1. Always call pg_manage_schema(operation="get_info", tableName="<table>") before ' +
+  "writing any query that references specific column names.\n" +
+  "2. Never send multiple SQL statements separated by semicolons in a single " +
+  "pg_execute_query call — split each statement into a separate tool invocation.\n" +
+  '3. For row counts, prefer operation="count" over embedding SELECT COUNT inside a ' +
+  "multi-statement query.";
+
+// ---------------------------------------------------------------------------
+// Line-buffered NDJSON reader
+// ---------------------------------------------------------------------------
+function readLines(
+  readable: NodeJS.ReadableStream,
+  onLine: (line: string) => void
+): void {
+  let buffer = "";
+  readable.on("data", (chunk: Buffer | string) => {
+    buffer += chunk.toString("utf8");
+    const lines = buffer.split("\n");
+    buffer = lines.pop()!;
+    for (const line of lines) {
+      if (line.trim()) onLine(line);
+    }
+  });
+  readable.on("end", () => {
+    if (buffer.trim()) onLine(buffer);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 function main(): void {
@@ -192,17 +235,92 @@ function main(): void {
   process.env["POSTGRES_CONNECTION_STRING"] = connStr;
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 
-  try {
-    execFileSync(
-      "npx",
-      ["-y", "@henkey/postgres-mcp-server", "--tools-config", toolsFile],
-      { stdio: "inherit", env: process.env }
-    );
-  } finally {
+  const child = spawn(
+    "npx",
+    ["-y", "@henkey/postgres-mcp-server", "--tools-config", toolsFile],
+    { env: process.env, stdio: ["pipe", "pipe", "inherit"] }
+  );
+
+  // stdin: MCP client → proxy → child (multi-statement guard)
+  readLines(process.stdin, (line) => {
+    let msg: any;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      child.stdin!.write(line + "\n");
+      return;
+    }
+
+    if (
+      msg.method === "tools/call" &&
+      msg.params?.name === "pg_execute_query" &&
+      typeof msg.params?.arguments?.query === "string" &&
+      hasMultipleStatements(msg.params.arguments.query)
+    ) {
+      const rejection = JSON.stringify({
+        jsonrpc: "2.0",
+        id: msg.id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: "Error: Multi-statement queries (multiple SQL statements separated by semicolons) are not allowed. Split each statement into a separate pg_execute_query call."
+            }
+          ],
+          isError: true
+        }
+      });
+      process.stdout.write(rejection + "\n");
+      return;
+    }
+
+    child.stdin!.write(line + "\n");
+  });
+
+  process.stdin.on("end", () => child.stdin!.end());
+
+  // stdout: child → proxy → MCP client (instructions injection)
+  readLines(child.stdout!, (line) => {
+    let msg: any;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      process.stdout.write(line + "\n");
+      return;
+    }
+
+    // Inject guidance instructions into the initialize response
+    if (msg.result?.serverInfo) {
+      const enhanced = {
+        ...msg,
+        result: {
+          ...msg.result,
+          instructions:
+            MCP_INSTRUCTIONS +
+            (msg.result.instructions ? "\n\n" + msg.result.instructions : "")
+        }
+      };
+      process.stdout.write(JSON.stringify(enhanced) + "\n");
+      return;
+    }
+
+    process.stdout.write(line + "\n");
+  });
+
+  child.on("error", (err) => {
+    process.stderr.write(`ERROR: Failed to start MCP server: ${err.message}\n`);
     try {
       unlinkSync(toolsFile);
     } catch {}
-  }
+    process.exit(1);
+  });
+
+  child.on("exit", (code) => {
+    try {
+      unlinkSync(toolsFile);
+    } catch {}
+    process.exit(code ?? 0);
+  });
 }
 
 // Only run main when this file is executed directly (not imported by tests)

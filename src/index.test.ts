@@ -9,7 +9,9 @@ import {
   loadEnvFile,
   resolveCredential,
   buildConnectionString,
-  DEFAULT_READONLY_TOOLS
+  DEFAULT_READONLY_TOOLS,
+  hasMultipleStatements,
+  MCP_INSTRUCTIONS
 } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -196,5 +198,55 @@ describe("DEFAULT_READONLY_TOOLS compatibility", () => {
         `Check if the tool names changed in a new version of @henkey/postgres-mcp-server.\n` +
         `Full stderr:\n${stderr}`
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasMultipleStatements
+// ---------------------------------------------------------------------------
+describe("hasMultipleStatements", () => {
+  test("returns false for a single SELECT", () => {
+    assert.equal(hasMultipleStatements("SELECT * FROM users"), false);
+  });
+
+  test("returns false for a single statement with a trailing semicolon", () => {
+    assert.equal(hasMultipleStatements("SELECT * FROM users;"), false);
+  });
+
+  test("returns true for two statements separated by semicolon", () => {
+    assert.equal(
+      hasMultipleStatements("SELECT COUNT(*) FROM users; SELECT * FROM users"),
+      true
+    );
+  });
+
+  test("returns false when semicolon appears only inside a string literal", () => {
+    assert.equal(
+      hasMultipleStatements("SELECT * FROM users WHERE name = 'a;b'"),
+      false
+    );
+  });
+
+  test("returns true when real separator exists alongside string with semicolon", () => {
+    assert.equal(hasMultipleStatements("SELECT 'a;b' FROM t; SELECT 1"), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MCP_INSTRUCTIONS
+// ---------------------------------------------------------------------------
+describe("MCP_INSTRUCTIONS", () => {
+  test("is a non-empty string", () => {
+    assert.ok(
+      typeof MCP_INSTRUCTIONS === "string" && MCP_INSTRUCTIONS.length > 0
+    );
+  });
+
+  test("mentions pg_manage_schema", () => {
+    assert.ok(MCP_INSTRUCTIONS.includes("pg_manage_schema"));
+  });
+
+  test("mentions semicolon / multi-statement guidance", () => {
+    assert.ok(MCP_INSTRUCTIONS.toLowerCase().includes("semicolon"));
   });
 });
