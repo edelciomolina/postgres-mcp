@@ -91,12 +91,42 @@ export function buildConnectionString(creds: {
 }
 
 // ---------------------------------------------------------------------------
+// Walk up directory tree to find .env
+// ---------------------------------------------------------------------------
+export function findEnvFile(startDir: string): string | null {
+  let dir = startDir;
+  while (true) {
+    const candidate = resolve(dir, ".env");
+    if (existsSync(candidate)) return candidate;
+    const parent = resolve(dir, "..");
+    if (parent === dir) return null; // reached filesystem root
+    dir = parent;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 function main(): void {
-  // Locate .env - walk up from cwd to find it
   const cwd = process.cwd();
-  const envPath = resolve(cwd, ".env");
+
+  // Explicit env-file=<path> arg takes priority; otherwise walk up from cwd
+  const envFileArg = process.argv
+    .slice(2)
+    .find((a) => a.startsWith("env-file="))
+    ?.slice(9);
+
+  const envPath = envFileArg ? resolve(cwd, envFileArg) : findEnvFile(cwd);
+
+  if (!envPath) {
+    process.stderr.write(
+      `ERROR: .env file not found in ${cwd} or any parent directory\n`
+    );
+    process.stderr.write(
+      `Tip: pass env-file=<relative-path> as an argument to point to the .env explicitly.\n`
+    );
+    process.exit(1);
+  }
 
   let dotenv: Record<string, string>;
   try {
@@ -138,7 +168,7 @@ function main(): void {
     process.exit(1);
   }
 
-  // Collect tools from args: tool=<name>
+  // Collect tools from args: tool=<name>  (env-file= args are excluded)
   const tools = process.argv
     .slice(2)
     .filter((a) => a.startsWith("tool="))

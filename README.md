@@ -29,7 +29,7 @@ This package wraps [@henkey/postgres-mcp-server](https://github.com/HenkDz/postg
 ## 📋 Requirements
 
 - ⚙️ Node.js >= 18
-- 📄 A `.env` file in your project root with the database credentials
+- 📄 A `.env` file with the database credentials (anywhere in the project tree — see [.env discovery](#-env-file-discovery))
 
 ---
 
@@ -150,7 +150,8 @@ Each enabled MCP tool is declared as a separate arg using the `tool=<name>` form
 
 ```json
 "args": [
-  "npx @edelciomolina/postgres-mcp",
+  "-y",
+  "@edelciomolina/postgres-mcp",
   "tool=pg_manage_schema",
   "tool=pg_manage_indexes"
 ]
@@ -188,6 +189,49 @@ pg_analyze_database    pg_monitor_database    pg_debug_database
 ```
 
 > 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the read-only tool set with a database user that only has `SELECT` privileges.
+
+---
+
+## 📍 `.env` file discovery
+
+The server resolves the `.env` file in this order:
+
+1. **`env-file=<path>` arg** — explicit path relative to `cwd`; takes priority over everything else
+2. **Walk-up** — starting from `cwd`, searches each parent directory until a `.env` is found or the filesystem root is reached
+
+If no `.env` is found, the server exits with a clear error message.
+
+### Monorepos and subfolders
+
+When VS Code starts the MCP process, `cwd` is typically the workspace root. If your `.env` lives in a subfolder (e.g. `functions/.env`), use `env-file=` to point to it explicitly:
+
+```json
+{
+  "servers": {
+    "Postgres Tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@edelciomolina/postgres-mcp",
+        "env-file=functions/.env",
+        "tool=pg_manage_schema",
+        "tool=pg_monitor_database"
+      ],
+      "env": {
+        "MCP_KEY_HOST":    "DB_HOST",
+        "MCP_KEY_PORT":    "DB_PORT",
+        "MCP_KEY_NAME":    "DB_NAME",
+        "MCP_KEY_SSLMODE": "DB_SSLMODE",
+        "MCP_KEY_USER":    "DB_USER",
+        "MCP_KEY_PASS":    "DB_PASS"
+      }
+    }
+  }
+}
+```
+
+> 💡 The walk-up behavior handles the common case automatically. Use `env-file=` when you need explicit control (CI, monorepos, Docker bind-mounts).
 
 ---
 

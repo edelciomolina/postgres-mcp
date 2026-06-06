@@ -1,6 +1,6 @@
 {
   "name": "@edelciomolina/postgres-mcp",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "mcpName": "io.github.edelciomolina/postgres-mcp",
   "description": "MCP server wrapper for PostgreSQL - reads credentials from .env with configurable key mapping and safe read-only defaults.",
   "bin": {
@@ -14,7 +14,7 @@
     "build": "tsc",
     "test": "tsc && node --test dist/index.test.js",
     "prepublishOnly": "npm run build",
-    "deploy:mcp": "npm publish --access public && mcp-publisher publish",
+    "deploy:mcp": "npm publish --access public && mcp-publisher login github && mcp-publisher publish",
     "status:mcp": "curl -s \"https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.edelciomolina/postgres-mcp\" | python3 -m json.tool"
   },
   "dependencies": {
