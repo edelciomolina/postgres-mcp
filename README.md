@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.png" width="96" alt="Postgres MCP icon"/>
+</p>
+
 # 🐘 Postgres MCP
 
 > 🔌 MCP server wrapper for PostgreSQL - reads credentials from `.env` at runtime with flexible key mapping, configurable tool selection, and **safe read-only defaults**.
