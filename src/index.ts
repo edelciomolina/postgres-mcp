@@ -20,7 +20,7 @@ import { URL as NodeURL } from "url";
 // operations cover the old individual tools (e.g. pg_get_schema_info is now
 // pg_manage_schema with operation="get_info").
 // ---------------------------------------------------------------------------
-const DEFAULT_READONLY_TOOLS = [
+export const DEFAULT_READONLY_TOOLS = [
   "pg_manage_query", // explain, slow queries, query stats (was: pg_explain_query, pg_get_slow_queries, pg_get_query_stats)
   "pg_manage_schema", // schema info, enums (was: pg_get_schema_info, pg_get_enums)
   "pg_manage_indexes", // index info + usage analysis (was: pg_get_indexes, pg_analyze_index_usage)

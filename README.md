@@ -70,45 +70,7 @@ No installation required. `npx` downloads and runs the package on demand. Add `-
 
 ---
 
-### Option 2 - Local install (per project)
-
-Useful when you want to pin a specific version or avoid downloading on every MCP server start.
-
-```bash
-npm install --save-dev @edelciomolina/postgres-mcp
-```
-
-Then reference the local binary directly in `mcp.json`:
-
-```json
-{
-  "servers": {
-    "Postgres Tools": {
-      "type": "stdio",
-      "command": "node",
-      "args": [
-        "./node_modules/@edelciomolina/postgres-mcp/dist/index.js",
-        "tool=pg_manage_query",
-        "tool=pg_manage_schema",
-        "tool=pg_manage_indexes",
-        "tool=pg_monitor_database"
-      ],
-      "env": {
-        "MCP_KEY_HOST":    "DB_HOST",
-        "MCP_KEY_PORT":    "DB_PORT",
-        "MCP_KEY_NAME":    "DB_NAME",
-        "MCP_KEY_SSLMODE": "DB_SSLMODE",
-        "MCP_KEY_USER":    "DB_USER",
-        "MCP_KEY_PASS":    "DB_PASS"
-      }
-    }
-  }
-}
-```
-
----
-
-### Option 3 — Install via VS Code (MCP extension marketplace)
+### Option 2 — Install via VS Code (MCP extension marketplace)
 
 VS Code supports discovering and installing MCP servers directly from the editor, without touching the terminal.
 

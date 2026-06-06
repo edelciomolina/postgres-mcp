@@ -1,10 +1,16 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 
-import { loadEnvFile, resolveCredential, buildConnectionString } from "./index";
+import {
+  loadEnvFile,
+  resolveCredential,
+  buildConnectionString,
+  DEFAULT_READONLY_TOOLS
+} from "./index";
 
 // ---------------------------------------------------------------------------
 // loadEnvFile
@@ -135,5 +141,60 @@ describe("buildConnectionString", () => {
       pass: "pass"
     });
     assert.ok(result.includes("user%40domain"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration: verify DEFAULT_READONLY_TOOLS are all known to the henkey server
+// ---------------------------------------------------------------------------
+describe("DEFAULT_READONLY_TOOLS compatibility", () => {
+  test("all default tools are recognised by @henkey/postgres-mcp-server", () => {
+    const toolsFile = join(tmpdir(), `mcp-pg-tools-test-${process.pid}.json`);
+    writeFileSync(
+      toolsFile,
+      JSON.stringify({ enabledTools: DEFAULT_READONLY_TOOLS }, null, 2)
+    );
+
+    const henkeyBin = resolve(
+      __dirname,
+      "../node_modules/@henkey/postgres-mcp-server/build/index.js"
+    );
+
+    // Spawn the henkey server briefly. It will load the tools config, print any
+    // "not found in available tools" warnings to stderr, then block on stdio
+    // transport — so we kill it immediately after collecting stderr output.
+    const result = spawnSync(
+      process.execPath,
+      [henkeyBin, "--tools-config", toolsFile],
+      {
+        timeout: 5000,
+        env: {
+          ...process.env,
+          POSTGRES_CONNECTION_STRING: "postgresql://x:x@localhost:5432/x",
+          NODE_TLS_REJECT_UNAUTHORIZED: "0"
+        }
+      }
+    );
+
+    try {
+      unlinkSync(toolsFile);
+    } catch {
+      /* ignore */
+    }
+
+    const stderr = result.stderr?.toString() ?? "";
+    const unknownTools = [
+      ...stderr.matchAll(
+        /\[MCP Warning\] Tool "([^"]+)" specified in config file but not found in available tools/g
+      )
+    ].map((m) => m[1]);
+
+    assert.deepEqual(
+      unknownTools,
+      [],
+      `The following tools in DEFAULT_READONLY_TOOLS are not available in @henkey/postgres-mcp-server: ${unknownTools.join(", ")}\n` +
+        `Check if the tool names changed in a new version of @henkey/postgres-mcp-server.\n` +
+        `Full stderr:\n${stderr}`
+    );
   });
 });
