@@ -21,7 +21,7 @@ describe("loadEnvFile", () => {
 
   test("strips surrounding quotes from values", () => {
     const file = join(tmpdir(), ".env-test-quotes");
-    writeFileSync(file, 'DB_PASS="my secret"\nDB_USER=\'admin\'\n');
+    writeFileSync(file, "DB_PASS=\"my secret\"\nDB_USER='admin'\n");
     const env = loadEnvFile(file);
     assert.equal(env["DB_PASS"], "my secret");
     assert.equal(env["DB_USER"], "admin");
@@ -69,19 +69,28 @@ describe("resolveCredential", () => {
   test("uses mapped key from MCP_KEY_* env var", () => {
     const envVars = { MCP_KEY_HOST: "MY_HOST" };
     const dotenv = { MY_HOST: "db.example.com" };
-    assert.equal(resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"), "db.example.com");
+    assert.equal(
+      resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"),
+      "db.example.com"
+    );
   });
 
   test("falls back to default key when MCP_KEY_* is absent", () => {
     const envVars: Record<string, string> = {};
     const dotenv = { DB_HOST: "fallback-host" };
-    assert.equal(resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"), "fallback-host");
+    assert.equal(
+      resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"),
+      "fallback-host"
+    );
   });
 
   test("returns empty string when dotenv key is missing", () => {
     const envVars: Record<string, string> = {};
     const dotenv: Record<string, string> = {};
-    assert.equal(resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"), "");
+    assert.equal(
+      resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"),
+      ""
+    );
   });
 });
 
@@ -96,7 +105,7 @@ describe("buildConnectionString", () => {
       name: "mydb",
       sslmode: "require",
       user: "alice",
-      pass: "secret",
+      pass: "secret"
     });
     assert.equal(
       result,
@@ -111,7 +120,7 @@ describe("buildConnectionString", () => {
       name: "db",
       sslmode: "disable",
       user: "user",
-      pass: "p@ss w0rd!",
+      pass: "p@ss w0rd!"
     });
     assert.ok(result.includes("p%40ss%20w0rd!"));
   });
@@ -123,7 +132,7 @@ describe("buildConnectionString", () => {
       name: "db",
       sslmode: "disable",
       user: "user@domain",
-      pass: "pass",
+      pass: "pass"
     });
     assert.ok(result.includes("user%40domain"));
   });
