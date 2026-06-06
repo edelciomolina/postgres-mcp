@@ -13,7 +13,9 @@
   "scripts": {
     "build": "tsc",
     "test": "tsc && node --test dist/index.test.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "deploy:mcp": "npm publish --access public && mcp-publisher publish",
+    "status:mcp": "curl -s \"https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.edelciomolina/postgres-mcp\" | python3 -m json.tool"
   },
   "dependencies": {
     "@henkey/postgres-mcp-server": "^1.0.5"
