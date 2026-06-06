@@ -169,7 +169,6 @@ If you omit all `tool=` args, the server starts with a **curated read-only set**
 
 | Tool | Risk |
 |------|------|
-| `pg_execute_query`          | Runs arbitrary SQL — including `INSERT`, `UPDATE`, `DELETE`, `DROP` |
 | `pg_execute_mutation`       | Explicit DML mutations |
 | `pg_execute_sql`            | Runs arbitrary SQL commands |
 | `pg_import_table_data`      | Writes/imports data into tables |
@@ -182,13 +181,16 @@ If you omit all `tool=` args, the server starts with a **curated read-only set**
 > ⚠️ Since `@henkey/postgres-mcp-server` >=1.0.5 uses **consolidated tools**, each default tool bundles both read and write sub-operations (e.g. `pg_manage_schema` covers both `get_info` and `create_table`). True write-prevention requires a read-only database user.
 
 ```
-pg_manage_query        pg_manage_schema       pg_manage_indexes
-pg_manage_constraints  pg_manage_functions    pg_manage_triggers
-pg_manage_rls          pg_get_setup_instructions pg_manage_users
-pg_analyze_database    pg_monitor_database    pg_debug_database
+pg_execute_query       pg_manage_query        pg_manage_schema
+pg_manage_indexes      pg_manage_constraints  pg_manage_functions
+pg_manage_triggers     pg_manage_rls          pg_get_setup_instructions
+pg_manage_users        pg_analyze_database    pg_monitor_database
+pg_debug_database
 ```
 
-> 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the read-only tool set with a database user that only has `SELECT` privileges.
+> 💡 `pg_execute_query` is included in the defaults but is **proxy-enforced read-only**: the server intercepts any `INSERT`, `UPDATE`, `DELETE`, or DDL statement and returns a permission error before it reaches the database — no database-level restriction needed for this tool.
+
+> 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the default tool set with a database user that only has `SELECT` privileges.
 
 ---
 

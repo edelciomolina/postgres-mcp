@@ -115,6 +115,20 @@ export function hasMultipleStatements(query: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Write-operation guard
+// ---------------------------------------------------------------------------
+export function isWriteOperation(query: string): boolean {
+  // Strip comments before checking
+  const stripped = query
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--[^\n]*/g, "")
+    .trim();
+  return /^(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|CREATE|ALTER|REPLACE|GRANT|REVOKE|COPY)\b/i.test(
+    stripped
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Instructions injected into the MCP initialize response
 // ---------------------------------------------------------------------------
 export const MCP_INSTRUCTIONS =
@@ -124,7 +138,12 @@ export const MCP_INSTRUCTIONS =
   "2. Never send multiple SQL statements separated by semicolons in a single " +
   "pg_execute_query call — split each statement into a separate tool invocation.\n" +
   '3. For row counts, prefer operation="count" over embedding SELECT COUNT inside a ' +
-  "multi-statement query.";
+  "multi-statement query.\n" +
+  "4. Permission boundaries: if a tool rejects an operation due to insufficient " +
+  "permissions, stop immediately and inform the user — do NOT attempt to work around " +
+  "the restriction via terminal commands, psql, reading .env files, or any other means. " +
+  "Clearly state which tool was used, what permission it lacks, and what configuration " +
+  "change would be needed to perform the operation.";
 
 // ---------------------------------------------------------------------------
 // Line-buffered NDJSON reader
@@ -265,6 +284,68 @@ function main(): void {
             {
               type: "text",
               text: "Error: Multi-statement queries (multiple SQL statements separated by semicolons) are not allowed. Split each statement into a separate pg_execute_query call."
+            }
+          ],
+          isError: true
+        }
+      });
+      process.stdout.write(rejection + "\n");
+      return;
+    }
+
+    // Write-operation guard: pg_execute_query is read-only
+    if (
+      msg.method === "tools/call" &&
+      msg.params?.name === "pg_execute_query" &&
+      typeof msg.params?.arguments?.query === "string" &&
+      isWriteOperation(msg.params.arguments.query)
+    ) {
+      const rejection = JSON.stringify({
+        jsonrpc: "2.0",
+        id: msg.id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text:
+                "Permission denied: pg_execute_query only supports read-only operations " +
+                "(SELECT / COUNT / EXISTS). Write operations (INSERT, UPDATE, DELETE, DDL) " +
+                "are not permitted in this MCP configuration.\n\n" +
+                "Do NOT attempt to work around this restriction using terminal commands, " +
+                "psql, reading .env files, or any other means. " +
+                "To perform write operations, the MCP server must be reconfigured to " +
+                "include a write-enabled tool (e.g. pg_execute_sql)."
+            }
+          ],
+          isError: true
+        }
+      });
+      process.stdout.write(rejection + "\n");
+      return;
+    }
+
+    // Disabled-tool guard: reject calls to tools not in the enabled list
+    if (
+      msg.method === "tools/call" &&
+      typeof msg.params?.name === "string" &&
+      !enabledTools.includes(msg.params.name)
+    ) {
+      const rejection = JSON.stringify({
+        jsonrpc: "2.0",
+        id: msg.id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text:
+                `Permission denied: the tool "${msg.params.name}" is not enabled in this ` +
+                "MCP configuration.\n\n" +
+                "Available tools: " +
+                enabledTools.join(", ") +
+                ".\n\n" +
+                "Do NOT attempt to work around this restriction using terminal commands, " +
+                "psql, reading .env files, or any other means. " +
+                "To use this tool, the MCP server must be reconfigured to include it."
             }
           ],
           isError: true
