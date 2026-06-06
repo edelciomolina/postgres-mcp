@@ -14,12 +14,12 @@
       "sizes": ["any"]
     }
   ],
-  "version": "1.0.1",
+  "version": "1.0.3",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@edelciomolina/postgres-mcp",
-      "version": "1.0.1",
+      "version": "1.0.3",
       "transport": {
         "type": "stdio"
       },
