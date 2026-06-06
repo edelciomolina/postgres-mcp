@@ -17,7 +17,7 @@
     "@henkey/postgres-mcp-server": "^1.0.5"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.42",
     "typescript": "^5.0.0"
   },
   "engines": {
