@@ -1,0 +1,72 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.edelciomolina/postgres-mcp",
+  "title": "Postgres MCP",
+  "description": "PostgreSQL MCP wrapper with .env credential mapping, tool selection, and safe read-only defaults.",
+  "repository": {
+    "url": "https://github.com/edelciomolina/postgres-mcp",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"]
+    }
+  ],
+  "version": "1.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@edelciomolina/postgres-mcp",
+      "version": "1.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "MCP_KEY_HOST",
+          "description": "Name of the .env variable that holds the database host",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "MCP_KEY_PORT",
+          "description": "Name of the .env variable that holds the database port",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "MCP_KEY_NAME",
+          "description": "Name of the .env variable that holds the database name",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "MCP_KEY_USER",
+          "description": "Name of the .env variable that holds the database user",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "MCP_KEY_PASS",
+          "description": "Name of the .env variable that holds the database password",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "MCP_KEY_SSLMODE",
+          "description": "Name of the .env variable that holds the SSL mode (e.g. require)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
