@@ -1,3 +1,5 @@
+> 🌐 **English** | [Português](README_PT.md)
+
 <table border="0" cellspacing="0" cellpadding="0">
   <tr>
     <td width="110">
@@ -241,6 +243,12 @@ When VS Code starts the MCP process, `cwd` is typically the workspace root. If y
 
 See the full list of available tools in the underlying server:  
 📦 [@henkey/postgres-mcp-server](https://github.com/HenkDz/postgresql-mcp-server)
+
+---
+
+## 🏗️ Architecture
+
+For a deep dive into the communication flow between the MCP client, proxy, and PostgreSQL — including the full sequence diagram — see [ARCHITECT.md](ARCHITECT.md).
 
 ---
 

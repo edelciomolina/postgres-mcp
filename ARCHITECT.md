@@ -1,3 +1,5 @@
+> 🌐 **English** | [Português](ARCHITECT_PT.md)
+
 # Architecture
 
 This document describes the communication flow between a MCP client and PostgreSQL when using `@edelciomolina/postgres-mcp`.
