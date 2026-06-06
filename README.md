@@ -4,10 +4,10 @@
       <img src="https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.png" width="96" alt="Postgres MCP icon"/>
     </td>
     <td>
-      <h1>🐘 Postgres MCP</h1>
+      <h1>Postgres MCP</h1>
       <p>🔌 MCP server wrapper for PostgreSQL — reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
       <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/v/@edelciomolina/postgres-mcp" alt="npm version"/></a>
-      <a href="./LICENSE.md"><img src="https://img.shields.io/npm/l/@edelciomolina/postgres-mcp" alt="license"/></a>
+      <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/l/%40edelciomolina%2Fpostgres-mcp" alt="license"/></a>
     </td>
   </tr>
 </table>
