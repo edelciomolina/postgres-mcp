@@ -1,5 +1,4 @@
-import { test, describe } from "node:test";
-import assert from "node:assert/strict";
+import { describe, test, expect } from "vitest";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -9,8 +8,10 @@ import {
   resolveCredential,
   buildConnectionString,
   DEFAULT_READONLY_TOOLS,
+  WRITE_CAPABLE_TOOLS,
   SUPPORTED_TOOLS,
   hasMultipleStatements,
+  isWriteOperation,
   MCP_INSTRUCTIONS
 } from "./index";
 
@@ -22,8 +23,8 @@ describe("loadEnvFile", () => {
     const file = join(tmpdir(), ".env-test-simple");
     writeFileSync(file, "DB_HOST=localhost\nDB_PORT=5432\n");
     const env = loadEnvFile(file);
-    assert.equal(env["DB_HOST"], "localhost");
-    assert.equal(env["DB_PORT"], "5432");
+    expect(env["DB_HOST"]).toBe("localhost");
+    expect(env["DB_PORT"]).toBe("5432");
     unlinkSync(file);
   });
 
@@ -31,8 +32,8 @@ describe("loadEnvFile", () => {
     const file = join(tmpdir(), ".env-test-quotes");
     writeFileSync(file, "DB_PASS=\"my secret\"\nDB_USER='admin'\n");
     const env = loadEnvFile(file);
-    assert.equal(env["DB_PASS"], "my secret");
-    assert.equal(env["DB_USER"], "admin");
+    expect(env["DB_PASS"]).toBe("my secret");
+    expect(env["DB_USER"]).toBe("admin");
     unlinkSync(file);
   });
 
@@ -40,8 +41,8 @@ describe("loadEnvFile", () => {
     const file = join(tmpdir(), ".env-test-comments");
     writeFileSync(file, "# comment\n\nDB_NAME=mydb\n");
     const env = loadEnvFile(file);
-    assert.equal(Object.keys(env).length, 1);
-    assert.equal(env["DB_NAME"], "mydb");
+    expect(Object.keys(env).length).toBe(1);
+    expect(env["DB_NAME"]).toBe("mydb");
     unlinkSync(file);
   });
 
@@ -49,8 +50,8 @@ describe("loadEnvFile", () => {
     const file = join(tmpdir(), ".env-test-noeq");
     writeFileSync(file, "INVALID_LINE\nDB_NAME=mydb\n");
     const env = loadEnvFile(file);
-    assert.equal(env["DB_NAME"], "mydb");
-    assert.equal(env["INVALID_LINE"], undefined);
+    expect(env["DB_NAME"]).toBe("mydb");
+    expect(env["INVALID_LINE"]).toBeUndefined();
     unlinkSync(file);
   });
 
@@ -58,13 +59,12 @@ describe("loadEnvFile", () => {
     const file = join(tmpdir(), ".env-test-eqval");
     writeFileSync(file, "DB_PASS=abc=def=ghi\n");
     const env = loadEnvFile(file);
-    assert.equal(env["DB_PASS"], "abc=def=ghi");
+    expect(env["DB_PASS"]).toBe("abc=def=ghi");
     unlinkSync(file);
   });
 
   test("throws when file does not exist", () => {
-    assert.throws(
-      () => loadEnvFile("/nonexistent/.env"),
+    expect(() => loadEnvFile("/nonexistent/.env")).toThrow(
       /\.env file not found/
     );
   });
@@ -77,8 +77,7 @@ describe("resolveCredential", () => {
   test("uses mapped key from MCP_KEY_* env var", () => {
     const envVars = { MCP_KEY_HOST: "MY_HOST" };
     const dotenv = { MY_HOST: "db.example.com" };
-    assert.equal(
-      resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"),
+    expect(resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST")).toBe(
       "db.example.com"
     );
   });
@@ -86,8 +85,7 @@ describe("resolveCredential", () => {
   test("falls back to default key when MCP_KEY_* is absent", () => {
     const envVars: Record<string, string> = {};
     const dotenv = { DB_HOST: "fallback-host" };
-    assert.equal(
-      resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"),
+    expect(resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST")).toBe(
       "fallback-host"
     );
   });
@@ -95,8 +93,7 @@ describe("resolveCredential", () => {
   test("returns empty string when dotenv key is missing", () => {
     const envVars: Record<string, string> = {};
     const dotenv: Record<string, string> = {};
-    assert.equal(
-      resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST"),
+    expect(resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST")).toBe(
       ""
     );
   });
@@ -115,8 +112,7 @@ describe("buildConnectionString", () => {
       user: "alice",
       pass: "secret"
     });
-    assert.equal(
-      result,
+    expect(result).toBe(
       "postgresql://alice:secret@db.example.com:5432/mydb?sslmode=require"
     );
   });
@@ -130,7 +126,7 @@ describe("buildConnectionString", () => {
       user: "user",
       pass: "p@ss w0rd!"
     });
-    assert.ok(result.includes("p%40ss%20w0rd!"));
+    expect(result).toContain("p%40ss%20w0rd!");
   });
 
   test("URL-encodes special characters in username", () => {
@@ -142,23 +138,54 @@ describe("buildConnectionString", () => {
       user: "user@domain",
       pass: "pass"
     });
-    assert.ok(result.includes("user%40domain"));
+    expect(result).toContain("user%40domain");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Integration: verify DEFAULT_READONLY_TOOLS are all implemented by this server
+// DEFAULT_READONLY_TOOLS - must contain only truly read-only tools
 // ---------------------------------------------------------------------------
-describe("DEFAULT_READONLY_TOOLS compatibility", () => {
+describe("DEFAULT_READONLY_TOOLS", () => {
   test("all default tools are present in SUPPORTED_TOOLS", () => {
     const missing = DEFAULT_READONLY_TOOLS.filter(
       (tool) => !SUPPORTED_TOOLS.includes(tool)
     );
-    assert.deepEqual(
-      missing,
-      [],
-      `The following tools in DEFAULT_READONLY_TOOLS are not implemented: ${missing.join(", ")}`
+    expect(missing).toEqual([]);
+  });
+
+  test("contains no write-capable tools", () => {
+    const overlap = DEFAULT_READONLY_TOOLS.filter((tool) =>
+      WRITE_CAPABLE_TOOLS.includes(tool)
     );
+    expect(overlap).toEqual([]);
+  });
+
+  test("pg_manage_schema is NOT in default", () => {
+    expect(DEFAULT_READONLY_TOOLS.includes("pg_manage_schema")).toBe(false);
+  });
+
+  test("pg_execute_mutation is NOT in default", () => {
+    expect(DEFAULT_READONLY_TOOLS.includes("pg_execute_mutation")).toBe(false);
+  });
+
+  test("pg_execute_sql is NOT in default", () => {
+    expect(DEFAULT_READONLY_TOOLS.includes("pg_execute_sql")).toBe(false);
+  });
+
+  test("pg_inspect_schema IS in default", () => {
+    expect(DEFAULT_READONLY_TOOLS.includes("pg_inspect_schema")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WRITE_CAPABLE_TOOLS - all must be in SUPPORTED_TOOLS
+// ---------------------------------------------------------------------------
+describe("WRITE_CAPABLE_TOOLS", () => {
+  test("all write-capable tools are present in SUPPORTED_TOOLS", () => {
+    const missing = WRITE_CAPABLE_TOOLS.filter(
+      (tool) => !SUPPORTED_TOOLS.includes(tool)
+    );
+    expect(missing).toEqual([]);
   });
 });
 
@@ -167,29 +194,27 @@ describe("DEFAULT_READONLY_TOOLS compatibility", () => {
 // ---------------------------------------------------------------------------
 describe("hasMultipleStatements", () => {
   test("returns false for a single SELECT", () => {
-    assert.equal(hasMultipleStatements("SELECT * FROM users"), false);
+    expect(hasMultipleStatements("SELECT * FROM users")).toBe(false);
   });
 
   test("returns false for a single statement with a trailing semicolon", () => {
-    assert.equal(hasMultipleStatements("SELECT * FROM users;"), false);
+    expect(hasMultipleStatements("SELECT * FROM users;")).toBe(false);
   });
 
   test("returns true for two statements separated by semicolon", () => {
-    assert.equal(
-      hasMultipleStatements("SELECT COUNT(*) FROM users; SELECT * FROM users"),
-      true
-    );
+    expect(
+      hasMultipleStatements("SELECT COUNT(*) FROM users; SELECT * FROM users")
+    ).toBe(true);
   });
 
   test("returns false when semicolon appears only inside a string literal", () => {
-    assert.equal(
-      hasMultipleStatements("SELECT * FROM users WHERE name = 'a;b'"),
-      false
-    );
+    expect(
+      hasMultipleStatements("SELECT * FROM users WHERE name = 'a;b'")
+    ).toBe(false);
   });
 
   test("returns true when real separator exists alongside string with semicolon", () => {
-    assert.equal(hasMultipleStatements("SELECT 'a;b' FROM t; SELECT 1"), true);
+    expect(hasMultipleStatements("SELECT 'a;b' FROM t; SELECT 1")).toBe(true);
   });
 });
 
@@ -198,16 +223,68 @@ describe("hasMultipleStatements", () => {
 // ---------------------------------------------------------------------------
 describe("MCP_INSTRUCTIONS", () => {
   test("is a non-empty string", () => {
-    assert.ok(
+    expect(
       typeof MCP_INSTRUCTIONS === "string" && MCP_INSTRUCTIONS.length > 0
-    );
+    ).toBe(true);
   });
 
-  test("mentions pg_manage_schema", () => {
-    assert.ok(MCP_INSTRUCTIONS.includes("pg_manage_schema"));
+  test("mentions pg_inspect_schema", () => {
+    expect(MCP_INSTRUCTIONS).toContain("pg_inspect_schema");
+  });
+
+  test("does NOT mention pg_manage_schema (removed from default)", () => {
+    expect(MCP_INSTRUCTIONS).not.toContain("pg_manage_schema");
   });
 
   test("mentions semicolon / multi-statement guidance", () => {
-    assert.ok(MCP_INSTRUCTIONS.toLowerCase().includes("semicolon"));
+    expect(MCP_INSTRUCTIONS.toLowerCase()).toContain("semicolon");
   });
+});
+
+// ---------------------------------------------------------------------------
+// isWriteOperation
+// ---------------------------------------------------------------------------
+describe("isWriteOperation", () => {
+  // Should be blocked (returns true)
+  for (const q of [
+    "INSERT INTO t VALUES (1)",
+    "UPDATE t SET x = 1",
+    "DELETE FROM t",
+    "CREATE TABLE t (id INT)",
+    "ALTER TABLE t ADD COLUMN x INT",
+    "DROP TABLE t",
+    "TRUNCATE t",
+    "GRANT SELECT ON t TO u",
+    "REVOKE SELECT ON t FROM u",
+    "COPY t FROM stdin",
+    "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE",
+    "CALL my_proc()",
+    "DO $$ BEGIN NULL; END $$",
+    "VACUUM t",
+    "ANALYZE t",
+    "REINDEX TABLE t",
+    "CLUSTER t USING idx",
+    "COMMENT ON TABLE t IS 'x'",
+    "EXPLAIN ANALYZE SELECT 1",
+    "explain analyze select * from t",
+    "EXPLAIN (ANALYZE TRUE, BUFFERS TRUE) SELECT 1",
+    "  -- comment\nANALYZE t"
+  ]) {
+    test(`blocks: ${q.slice(0, 60)}`, () => {
+      expect(isWriteOperation(q)).toBe(true);
+    });
+  }
+
+  // Should be allowed (returns false)
+  for (const q of [
+    "SELECT * FROM t",
+    "select count(*) from t",
+    "EXPLAIN SELECT * FROM t",
+    "EXPLAIN (FORMAT JSON) SELECT 1",
+    "WITH cte AS (SELECT 1) SELECT * FROM cte"
+  ]) {
+    test(`allows: ${q.slice(0, 60)}`, () => {
+      expect(isWriteOperation(q)).toBe(false);
+    });
+  }
 });

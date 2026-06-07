@@ -12,7 +12,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test dist/index.test.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "deploy:mcp": "npm version patch --no-git-tag-version && node -e \"const fs=require('fs'),p=require('./package.json'),s=JSON.parse(fs.readFileSync('server.json','utf8'));s.version=p.version;s.packages[0].version=p.version;fs.writeFileSync('server.json',JSON.stringify(s,null,2)+'\\n');\" && npm publish --access public && mcp-publisher login github && mcp-publisher publish",
     "status:mcp": "curl -s \"https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.edelciomolina/postgres-mcp\" | python3 -m json.tool"
   },
@@ -24,7 +25,9 @@
   "devDependencies": {
     "@types/node": "^20.19.42",
     "@types/pg": "^8.20.0",
-    "typescript": "^5.0.0"
+    "tsx": "^4.22.4",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=18"
