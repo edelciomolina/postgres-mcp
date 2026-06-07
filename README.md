@@ -51,11 +51,7 @@ No installation required. `npx` downloads and runs the package on demand. Add `-
       "command": "npx",
       "args": [
         "-y",
-        "@edelciomolina/postgres-mcp",
-        "tool=pg_manage_query",
-        "tool=pg_manage_schema",
-        "tool=pg_manage_indexes",
-        "tool=pg_monitor_database"
+        "@edelciomolina/postgres-mcp"
       ],
       "env": {
         "MCP_KEY_HOST":    "DB_HOST",
@@ -69,6 +65,8 @@ No installation required. `npx` downloads and runs the package on demand. Add `-
   }
 }
 ```
+
+This starts the server with the **read-only default tool set** - no `tool=` args needed. To enable write-capable tools, see [Write-capable tools](#write-capable-opt-in-via-tool-arg).
 
 ---
 
@@ -90,19 +88,15 @@ After installing, edit the generated entry in `.vscode/mcp.json` to add your `to
 
 ## 🚀 Usage in VS Code (`mcp.json`)
 
+**Read-only (default - no `tool=` args needed):**
+
 ```json
 {
   "servers": {
     "Postgres Tools": {
       "type": "stdio",
       "command": "npx",
-      "args": [
-        "@edelciomolina/postgres-mcp",
-        "tool=pg_manage_query",
-        "tool=pg_manage_schema",
-        "tool=pg_manage_indexes",
-        "tool=pg_monitor_database"
-      ],
+      "args": ["@edelciomolina/postgres-mcp"],
       "env": {
         "MCP_KEY_HOST":    "DB_HOST",
         "MCP_KEY_PORT":    "DB_PORT",
@@ -115,6 +109,35 @@ After installing, edit the generated entry in `.vscode/mcp.json` to add your `to
   }
 }
 ```
+
+**With write-capable tools (explicit opt-in required):**
+
+```json
+{
+  "servers": {
+    "Postgres Tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@edelciomolina/postgres-mcp",
+        "tool=pg_manage_schema",
+        "tool=pg_manage_indexes"
+      ],
+      "env": {
+        "POSTGRES_MCP_ALLOW_WRITE": "true",
+        "MCP_KEY_HOST":    "DB_HOST",
+        "MCP_KEY_PORT":    "DB_PORT",
+        "MCP_KEY_NAME":    "DB_NAME",
+        "MCP_KEY_SSLMODE": "DB_SSLMODE",
+        "MCP_KEY_USER":    "DB_USER",
+        "MCP_KEY_PASS":    "DB_PASS"
+      }
+    }
+  }
+}
+```
+
+> ⚠️ Write-capable tools require `POSTGRES_MCP_ALLOW_WRITE=true` in `env`. Without it, the server exits on startup.
 
 The corresponding `.env` in your project root:
 
@@ -167,28 +190,31 @@ This makes the tool list **explicit and auditable** directly in `mcp.json` - no 
 
 If you omit all `tool=` args, the server starts with a **curated read-only set** - every tool that can retrieve, analyze, or explain data, but nothing that can modify it.
 
-**⚠️ Excluded from defaults (write-capable, opt-in via `tool=` arg):**
-
-| Tool | Risk |
-|------|------|
-| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT operations |
-| `pg_execute_sql`      | Executes arbitrary SQL with optional transaction support |
-
-**✅ Included in defaults:**
+**✅ Included in defaults (read-only):**
 
 ```
-pg_execute_query       pg_manage_query        pg_manage_schema
-pg_manage_indexes      pg_manage_constraints  pg_manage_functions
-pg_manage_triggers     pg_manage_rls          pg_get_setup_instructions
-pg_manage_users        pg_analyze_database    pg_monitor_database
-pg_debug_database
+pg_execute_query    pg_manage_query    pg_inspect_schema
+pg_get_setup_instructions              pg_analyze_database
+pg_monitor_database                    pg_debug_database
 ```
 
-> 💡 `pg_execute_query` is included in the defaults but is **handler-enforced read-only**: the tool handler rejects any `INSERT`, `UPDATE`, `DELETE`, or DDL statement and returns a permission error before the database is contacted.
+> 💡 `pg_execute_query` rejects `INSERT`, `UPDATE`, `DELETE`, DDL, `ANALYZE`, `VACUUM`, `EXPLAIN ANALYZE`, and other write/maintenance commands before the database is contacted.
 
-> ⚠️ Management tools like `pg_manage_schema` bundle both read and write sub-operations (e.g. `get_info` and `create_table`). For strict write prevention, pair with a database user that only has `SELECT` privileges.
+> 💡 `pg_inspect_schema` provides read-only schema introspection (`get_info`, `get_enums`). For DDL operations use `pg_manage_schema` with explicit opt-in.
 
-> 💡 **Tip:** While this MCP is secure and customizable via tools, for maximum safety, pair the default tool set with a database user that only has `SELECT` privileges.
+**⚠️ Excluded from defaults - require `tool=` arg AND `POSTGRES_MCP_ALLOW_WRITE=true`:**
+
+| Tool | Operations |
+|------|------------|
+| `pg_manage_schema` | CREATE TABLE, ALTER TABLE, CREATE TYPE |
+| `pg_manage_indexes` | CREATE INDEX, DROP INDEX, REINDEX |
+| `pg_manage_constraints` | ADD CONSTRAINT, DROP CONSTRAINT |
+| `pg_manage_functions` | CREATE FUNCTION, DROP FUNCTION |
+| `pg_manage_triggers` | CREATE TRIGGER, DROP TRIGGER, enable/disable |
+| `pg_manage_rls` | ENABLE/DISABLE RLS, CREATE/ALTER/DROP POLICY |
+| `pg_manage_users` | CREATE/DROP/ALTER USER, GRANT, REVOKE |
+| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT |
+| `pg_execute_sql` | Arbitrary SQL with optional transaction |
 
 ---
 
@@ -214,9 +240,7 @@ When VS Code starts the MCP process, `cwd` is typically the workspace root. If y
       "args": [
         "-y",
         "@edelciomolina/postgres-mcp",
-        "env-file=functions/.env",
-        "tool=pg_manage_schema",
-        "tool=pg_monitor_database"
+        "env-file=functions/.env"
       ],
       "env": {
         "MCP_KEY_HOST":    "DB_HOST",
@@ -241,24 +265,25 @@ When VS Code starts the MCP process, `cwd` is typically the workspace root. If y
 
 | Tool | Description |
 |------|-------------|
-| `pg_execute_query` | SELECT / COUNT / EXISTS with multi-statement and write-op guards |
+| `pg_execute_query` | SELECT / COUNT / EXISTS with write-op and multi-statement guards |
 | `pg_manage_query` | EXPLAIN plans, slow query analysis, `pg_stat_statements` |
+| `pg_inspect_schema` | Schema info and ENUM types (read-only introspection) |
+| `pg_get_setup_instructions` | Platform-specific PostgreSQL setup instructions |
+| `pg_analyze_database` | Performance, configuration, and storage analysis |
+| `pg_monitor_database` | Real-time connection, query, lock, and replication monitoring |
+| `pg_debug_database` | Diagnose connections, locks, performance, and replication |
+
+### Write-capable (opt-in via `tool=` arg + `POSTGRES_MCP_ALLOW_WRITE=true`)
+
+| Tool | Description |
+|------|-------------|
 | `pg_manage_schema` | Schema info, create/alter tables, manage ENUMs |
 | `pg_manage_indexes` | Get, create, drop, reindex, analyze index usage |
 | `pg_manage_constraints` | Get, create, and drop constraints and foreign keys |
 | `pg_manage_functions` | Get, create, and drop functions/procedures |
 | `pg_manage_triggers` | Get, create, drop, enable/disable triggers |
 | `pg_manage_rls` | Row-Level Security policies |
-| `pg_get_setup_instructions` | Platform-specific PostgreSQL setup instructions |
 | `pg_manage_users` | User permissions, create/drop/alter users, grant/revoke |
-| `pg_analyze_database` | Performance, configuration, and storage analysis |
-| `pg_monitor_database` | Real-time connection, query, lock, and replication monitoring |
-| `pg_debug_database` | Diagnose connections, locks, performance, and replication |
-
-### Write-capable (opt-in via `tool=` arg)
-
-| Tool | Description |
-|------|-------------|
 | `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT with parameterized queries |
 | `pg_execute_sql` | Arbitrary SQL execution with optional transaction support |
 

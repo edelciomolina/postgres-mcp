@@ -14,33 +14,42 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod/v4";
 
 // ---------------------------------------------------------------------------
-// Default read-only tools (no pg_execute_mutation / pg_execute_sql)
+// Default read-only tools - no writes, no DDL, no arbitrary SQL
 // ---------------------------------------------------------------------------
-export const DEFAULT_READONLY_TOOLS = [
+export const DEFAULT_READONLY_TOOLS: readonly string[] = [
   "pg_execute_query",
   "pg_manage_query",
-  "pg_manage_schema",
-  "pg_manage_indexes",
-  "pg_manage_constraints",
-  "pg_manage_functions",
-  "pg_manage_triggers",
-  "pg_manage_rls",
+  "pg_inspect_schema",
   "pg_get_setup_instructions",
-  "pg_manage_users",
   "pg_analyze_database",
   "pg_monitor_database",
   "pg_debug_database"
 ];
 
 /**
+ * Tools that can write, alter, or drop database objects.
+ * Must be explicitly opted-in via `tool=<name>` args in mcp.json
+ * AND require POSTGRES_MCP_ALLOW_WRITE=true in the environment.
+ */
+export const WRITE_CAPABLE_TOOLS: readonly string[] = [
+  "pg_manage_schema",
+  "pg_manage_indexes",
+  "pg_manage_constraints",
+  "pg_manage_functions",
+  "pg_manage_triggers",
+  "pg_manage_rls",
+  "pg_manage_users",
+  "pg_execute_mutation",
+  "pg_execute_sql"
+];
+
+/**
  * All tool names this server can expose.
- * Includes write tools that are NOT in DEFAULT_READONLY_TOOLS.
- * Users can opt-in to write tools via `tool=<name>` args in mcp.json.
+ * Write-capable tools require explicit opt-in AND POSTGRES_MCP_ALLOW_WRITE=true.
  */
 export const SUPPORTED_TOOLS: readonly string[] = [
   ...DEFAULT_READONLY_TOOLS,
-  "pg_execute_mutation", // INSERT / UPDATE / DELETE / UPSERT (opt-in)
-  "pg_execute_sql" // arbitrary SQL with optional transaction (opt-in)
+  ...WRITE_CAPABLE_TOOLS
 ];
 
 // ---------------------------------------------------------------------------
@@ -128,9 +137,20 @@ export function isWriteOperation(query: string): boolean {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/--[^\n]*/g, "")
     .trim();
-  return /^(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|CREATE|ALTER|REPLACE|GRANT|REVOKE|COPY)\b/i.test(
-    stripped
-  );
+  // Block all DDL, DML, and maintenance commands
+  if (
+    /^(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|CREATE|ALTER|REPLACE|GRANT|REVOKE|COPY|CALL|DO|VACUUM|ANALYZE|REINDEX|CLUSTER|COMMENT)\b/i.test(
+      stripped
+    )
+  ) {
+    return true;
+  }
+  // Block EXPLAIN ANALYZE (executes the query): handles both
+  // `EXPLAIN ANALYZE ...` and `EXPLAIN (ANALYZE ...) ...` forms
+  if (/^EXPLAIN\b/i.test(stripped) && /\bANALYZE\b/i.test(stripped)) {
+    return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +158,7 @@ export function isWriteOperation(query: string): boolean {
 // ---------------------------------------------------------------------------
 export const MCP_INSTRUCTIONS =
   "PostgreSQL query rules:\n" +
-  '1. Always call pg_manage_schema(operation="get_info", tableName="<table>") before ' +
+  '1. Always call pg_inspect_schema(operation="get_info", tableName="<table>") before ' +
   "writing any query that references specific column names.\n" +
   "2. Never send multiple SQL statements separated by semicolons in a single " +
   "pg_execute_query call - split each statement into a separate tool invocation.\n" +
@@ -171,7 +191,7 @@ function fail(message: string): {
 function registerTools(
   server: McpServer,
   pool: Pool,
-  enabledTools: string[]
+  enabledTools: readonly string[]
 ): void {
   function enabled(name: string): boolean {
     return enabledTools.includes(name);
@@ -437,6 +457,90 @@ function registerTools(
               `CREATE TYPE ${ifne}"${schema}"."${enumName}" AS ENUM (${valList})`
             );
             return ok({ created: enumName, schema, values });
+          }
+
+          return fail(`Unknown operation: ${operation}`);
+        } finally {
+          client.release();
+        }
+      }
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // pg_inspect_schema  (read-only: get_info + get_enums only)
+  // -------------------------------------------------------------------------
+  if (enabled("pg_inspect_schema")) {
+    server.tool(
+      "pg_inspect_schema",
+      "Inspect PostgreSQL schema - list tables and columns, view ENUM types. Read-only.",
+      {
+        operation: z
+          .enum(["get_info", "get_enums"])
+          .describe("Operation to perform"),
+        schema: z
+          .string()
+          .optional()
+          .default("public")
+          .describe("Schema name (defaults to public)"),
+        tableName: z.string().optional().describe("Table name for get_info"),
+        enumName: z
+          .string()
+          .optional()
+          .describe("ENUM type name filter for get_enums")
+      },
+      async ({ operation, schema = "public", tableName, enumName }) => {
+        const client = await pool.connect();
+        try {
+          if (operation === "get_info") {
+            if (tableName) {
+              const colRes = await client.query(
+                `SELECT column_name, data_type, is_nullable, column_default
+                 FROM information_schema.columns
+                 WHERE table_schema = $1 AND table_name = $2
+                 ORDER BY ordinal_position`,
+                [schema, tableName]
+              );
+              const conRes = await client.query(
+                `SELECT tc.constraint_name, tc.constraint_type, kcu.column_name,
+                         ccu.table_name AS foreign_table, ccu.column_name AS foreign_column
+                 FROM information_schema.table_constraints tc
+                 JOIN information_schema.key_column_usage kcu
+                   ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                 LEFT JOIN information_schema.constraint_column_usage ccu
+                   ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
+                 WHERE tc.table_schema = $1 AND tc.table_name = $2`,
+                [schema, tableName]
+              );
+              return ok({
+                table: tableName,
+                schema,
+                columns: colRes.rows,
+                constraints: conRes.rows
+              });
+            }
+            const res = await client.query(
+              `SELECT table_name, table_type FROM information_schema.tables
+               WHERE table_schema = $1 ORDER BY table_name`,
+              [schema]
+            );
+            return ok({ schema, tables: res.rows });
+          }
+
+          if (operation === "get_enums") {
+            const params: unknown[] = [schema];
+            let sql = `SELECT t.typname AS enum_name, e.enumlabel AS value, e.enumsortorder AS sort_order
+                       FROM pg_type t
+                       JOIN pg_enum e ON t.oid = e.enumtypid
+                       JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                       WHERE n.nspname = $1`;
+            if (enumName) {
+              sql += ` AND t.typname = $2`;
+              params.push(enumName);
+            }
+            sql += ` ORDER BY t.typname, e.enumsortorder`;
+            const res = await client.query(sql, params);
+            return ok(res.rows);
           }
 
           return fail(`Unknown operation: ${operation}`);
@@ -2003,6 +2107,30 @@ function main(): void {
     .map((a) => a.slice(5));
 
   const enabledTools = tools.length > 0 ? tools : DEFAULT_READONLY_TOOLS;
+
+  // Validate requested tools
+  for (const tool of enabledTools) {
+    if (!SUPPORTED_TOOLS.includes(tool)) {
+      process.stderr.write(`ERROR: Unsupported tool: ${tool}\n`);
+      process.stderr.write(`Supported tools: ${SUPPORTED_TOOLS.join(", ")}\n`);
+      process.exit(1);
+    }
+  }
+
+  // Write-capable tools require explicit opt-in via environment variable
+  const hasWriteTool = enabledTools.some((tool) =>
+    WRITE_CAPABLE_TOOLS.includes(tool)
+  );
+  if (hasWriteTool && process.env["POSTGRES_MCP_ALLOW_WRITE"] !== "true") {
+    process.stderr.write(
+      "ERROR: Write-capable tools require POSTGRES_MCP_ALLOW_WRITE=true in the environment.\n" +
+        "Write-capable tools requested: " +
+        enabledTools.filter((t) => WRITE_CAPABLE_TOOLS.includes(t)).join(", ") +
+        "\n" +
+        "Set POSTGRES_MCP_ALLOW_WRITE=true in the env section of your mcp.json to proceed.\n"
+    );
+    process.exit(1);
+  }
 
   const connStr = buildConnectionString({
     host,

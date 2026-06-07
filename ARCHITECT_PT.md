@@ -6,7 +6,7 @@ Este documento descreve o fluxo de comunicação entre um cliente MCP e o Postgr
 
 ## Visão Geral
 
-O `@edelciomolina/postgres-mcp` é um **servidor MCP nativo** construído com [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) e [`pg`](https://www.npmjs.com/package/pg) (node-postgres). Não há processo filho ou proxy NDJSON — o protocolo MCP e a conectividade com o banco de dados são tratados diretamente.
+O `@edelciomolina/postgres-mcp` é um **servidor MCP nativo** construído com [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) e [`pg`](https://www.npmjs.com/package/pg) (node-postgres). Não há processo filho ou proxy NDJSON - o protocolo MCP e a conectividade com o banco de dados são tratados diretamente.
 
 | Responsabilidade | Quando |
 |---|---|
@@ -44,7 +44,7 @@ sequenceDiagram
 
     %% ── Schema check before query ─────────────────────────────────────
     note over Client,PG: Fluxo correto - inspecionar schema antes de consultar
-    Client->>Server: tools/call pg_manage_schema<br/>{ operation: "get_info", tableName: "users" }
+    Client->>Server: tools/call pg_inspect_schema<br/>{ operation: "get_info", tableName: "users" }
     Server->>Pool: pool.connect()
     Pool->>PG: query information_schema.columns
     PG-->>Pool: colunas, tipos, constraints
@@ -83,10 +83,10 @@ sequenceDiagram
 O servidor usa a classe `McpServer` do `@modelcontextprotocol/sdk` com `StdioServerTransport`. Não há processo filho ou proxy NDJSON. O protocolo MCP é tratado nativamente pelo SDK, mantendo o código simples e eliminando uma dependência de execução.
 
 ### 2. Instruções via construtor do SDK
-`MCP_INSTRUCTIONS` é passado para `new McpServer({ name, version }, { instructions })`. O SDK o injeta na resposta do `initialize` automaticamente — sem necessidade de interceptar mensagens ou fazer patch manual em JSON.
+`MCP_INSTRUCTIONS` é passado para `new McpServer({ name, version }, { instructions })`. O SDK o injeta na resposta do `initialize` automaticamente - sem necessidade de interceptar mensagens ou fazer patch manual em JSON.
 
 ### 3. Guards dentro dos handlers das tools
-As verificações de multi-statement (`hasMultipleStatements`) e de operação de escrita (`isWriteOperation`) ficam dentro da função handler de `pg_execute_query`. Se alguma delas falhar, o handler retorna um resultado de erro imediatamente — o banco de dados nunca é consultado e não é necessária nenhuma camada extra de interceptação.
+As verificações de multi-statement (`hasMultipleStatements`) e de operação de escrita (`isWriteOperation`) ficam dentro da função handler de `pg_execute_query`. Se alguma delas falhar, o handler retorna um resultado de erro imediatamente - o banco de dados nunca é consultado e não é necessária nenhuma camada extra de interceptação.
 
 ### 4. Registro seletivo de ferramentas
 Apenas as ferramentas presentes em `enabledTools` são registradas no `McpServer` durante a inicialização. Chamar uma ferramenta não registrada retorna o erro padrão "tool not found" do SDK. Não há guard de ferramentas desabilitadas em tempo de execução; a filtragem ocorre uma única vez, na inicialização.
@@ -95,4 +95,4 @@ Apenas as ferramentas presentes em `enabledTools` são registradas no `McpServer
 As credenciais nunca aparecem nos argumentos das tools MCP ou nas mensagens MCP. Elas são resolvidas na inicialização a partir de um arquivo `.env`, codificadas em URL em uma connection string e passadas para uma instância de `pg.Pool`. Os nomes das chaves podem ser remapeados via variáveis de ambiente `MCP_KEY_*`, permitindo que o mesmo `.env` sirva múltiplos serviços sem duplicação.
 
 ### 6. Somente leitura por padrão
-`DEFAULT_READONLY_TOOLS` omite as ferramentas de escrita (`pg_execute_mutation`, `pg_execute_sql`). O acesso de escrita requer a passagem explícita de argumentos `tool=<nome>` na inicialização.
+`DEFAULT_READONLY_TOOLS` contém apenas ferramentas que executam operações de leitura pura: `pg_execute_query`, `pg_manage_query`, `pg_inspect_schema`, `pg_get_setup_instructions`, `pg_analyze_database`, `pg_monitor_database` e `pg_debug_database`. Todas as ferramentas `pg_manage_*` que podem executar DDL ou DML (`pg_manage_schema`, `pg_manage_indexes`, `pg_manage_constraints`, `pg_manage_functions`, `pg_manage_triggers`, `pg_manage_rls`, `pg_manage_users`), além de `pg_execute_mutation` e `pg_execute_sql`, estão em `WRITE_CAPABLE_TOOLS` e nunca são expostas por padrão. O acesso de escrita exige a passagem explícita de argumentos `tool=<nome>` na inicialização **e** a configuração de `POSTGRES_MCP_ALLOW_WRITE=true` no ambiente.
