@@ -23,8 +23,19 @@ function deploy(release = "minor", runCommand = run) {
     // commit and tag, then uploads the VSIX.
     runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
 
-    // Publish the npm package (uses the version already bumped by vsce above).
-    runCommand("npm", ["publish", "--access", "public"]);
+    // Publish the npm package under the scoped name @edelciomolina/postgres-mcp.
+    // package.json uses "postgres-mcp" for VS Code, so we patch it temporarily.
+    const pkgPath = path.join(root, "package.json");
+    const pkgOriginal = readFileSync(pkgPath, "utf8");
+    const pkgForNpm = JSON.parse(pkgOriginal);
+    pkgForNpm.name = "@edelciomolina/postgres-mcp";
+    writeFileSync(pkgPath, JSON.stringify(pkgForNpm, null, 2) + "\n");
+    try {
+        runCommand("npm", ["publish", "--access", "public"]);
+    } finally {
+        // Restore so the working tree matches the committed state before git push.
+        writeFileSync(pkgPath, pkgOriginal);
+    }
 
     // Publish to the MCP Registry.
     runCommand("npx", ["mcp-publisher", "login", "github"]);

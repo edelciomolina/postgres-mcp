@@ -20,7 +20,7 @@
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "postgres-mcp",
+      "identifier": "@edelciomolina/postgres-mcp",
       "version": "1.2.0",
       "transport": {
         "type": "stdio"

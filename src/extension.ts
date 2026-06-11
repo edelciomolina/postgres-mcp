@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext): void {
           new vscode.McpStdioServerDefinition(
             "Postgres MCP",
             "npx",
-            ["-y", "postgres-mcp"],
+            ["-y", "@edelciomolina/postgres-mcp"],
             env
           )
         ];
