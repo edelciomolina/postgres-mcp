@@ -10,24 +10,26 @@ function deploy(release = "minor", runCommand = run) {
     }
 
     const root = path.join(__dirname, "..");
-    const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-    const newVersion = bumpVersion(pkg.version, release);
 
     runCommand("npm", ["run", "check"]);
 
-    // Update server.json and stage it so `npm version` (git commit -a) picks up
-    // both package.json and server.json in the same release commit.
+    // Publish to VS Code Marketplace — bumps package.json, creates the release
+    // commit and tag, then uploads the VSIX. The working tree must be clean here.
+    runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
+
+    // Read the version that vsce just bumped into package.json.
+    const pkgPath = path.join(root, "package.json");
+    const pkgOriginal = readFileSync(pkgPath, "utf8");
+    const newVersion = JSON.parse(pkgOriginal).version;
+
+    // Update server.json and amend the release commit to include it, then move the tag.
     updateServerJson(newVersion, root);
     runCommand("git", ["add", "server.json"]);
-
-    // Publish to VS Code Marketplace — bumps package.json, creates the release
-    // commit and tag, then uploads the VSIX.
-    runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
+    runCommand("git", ["commit", "--amend", "--no-edit"]);
+    runCommand("git", ["tag", "-f", `v${newVersion}`]);
 
     // Publish the npm package under the scoped name @edelciomolina/postgres-mcp.
     // package.json uses "postgres-mcp" for VS Code, so we patch it temporarily.
-    const pkgPath = path.join(root, "package.json");
-    const pkgOriginal = readFileSync(pkgPath, "utf8");
     const pkgForNpm = JSON.parse(pkgOriginal);
     pkgForNpm.name = "@edelciomolina/postgres-mcp";
     writeFileSync(pkgPath, JSON.stringify(pkgForNpm, null, 2) + "\n");
