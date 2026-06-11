@@ -2071,34 +2071,46 @@ function main(): void {
 
   const envVars = process.env as Record<string, string>;
 
-  const host = resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST");
-  const port = resolveCredential(envVars, dotenv, "MCP_KEY_PORT", "DB_PORT");
-  const name = resolveCredential(envVars, dotenv, "MCP_KEY_NAME", "DB_NAME");
-  const sslmode = resolveCredential(
-    envVars,
-    dotenv,
-    "MCP_KEY_SSLMODE",
-    "DB_SSLMODE"
-  );
-  const user = resolveCredential(envVars, dotenv, "MCP_KEY_USER", "DB_USER");
-  const pass = resolveCredential(envVars, dotenv, "MCP_KEY_PASS", "DB_PASS");
+  // URL-based connection takes priority over individual credentials
+  const url = resolveCredential(envVars, dotenv, "MCP_KEY_URL", "DATABASE_URL");
 
-  const missing: string[] = [];
-  if (!host) missing.push(envVars["MCP_KEY_HOST"] ?? "DB_HOST");
-  if (!port) missing.push(envVars["MCP_KEY_PORT"] ?? "DB_PORT");
-  if (!name) missing.push(envVars["MCP_KEY_NAME"] ?? "DB_NAME");
-  if (!sslmode) missing.push(envVars["MCP_KEY_SSLMODE"] ?? "DB_SSLMODE");
-  if (!user) missing.push(envVars["MCP_KEY_USER"] ?? "DB_USER");
-  if (!pass) missing.push(envVars["MCP_KEY_PASS"] ?? "DB_PASS");
+  let connStr: string;
 
-  if (missing.length > 0) {
-    process.stderr.write(
-      `ERROR: Missing keys in .env: ${missing.join(", ")}\n`
+  if (url) {
+    connStr = url;
+  } else {
+    const host = resolveCredential(envVars, dotenv, "MCP_KEY_HOST", "DB_HOST");
+    const port = resolveCredential(envVars, dotenv, "MCP_KEY_PORT", "DB_PORT");
+    const name = resolveCredential(envVars, dotenv, "MCP_KEY_NAME", "DB_NAME");
+    const sslmode = resolveCredential(
+      envVars,
+      dotenv,
+      "MCP_KEY_SSLMODE",
+      "DB_SSLMODE"
     );
-    process.stderr.write(
-      `Check the mapping in mcp.json (env field > MCP_KEY_*) and the .env file.\n`
-    );
-    process.exit(1);
+    const user = resolveCredential(envVars, dotenv, "MCP_KEY_USER", "DB_USER");
+    const pass = resolveCredential(envVars, dotenv, "MCP_KEY_PASS", "DB_PASS");
+
+    const missing: string[] = [];
+    if (!host) missing.push(envVars["MCP_KEY_HOST"] ?? "DB_HOST");
+    if (!port) missing.push(envVars["MCP_KEY_PORT"] ?? "DB_PORT");
+    if (!name) missing.push(envVars["MCP_KEY_NAME"] ?? "DB_NAME");
+    if (!sslmode) missing.push(envVars["MCP_KEY_SSLMODE"] ?? "DB_SSLMODE");
+    if (!user) missing.push(envVars["MCP_KEY_USER"] ?? "DB_USER");
+    if (!pass) missing.push(envVars["MCP_KEY_PASS"] ?? "DB_PASS");
+
+    if (missing.length > 0) {
+      process.stderr.write(
+        `ERROR: Missing keys in .env: ${missing.join(", ")}\n`
+      );
+      process.stderr.write(
+        `Check the mapping in mcp.json (env field > MCP_KEY_*) and the .env file.\n` +
+          `Alternatively, set DATABASE_URL (or MCP_KEY_URL mapping) with a full connection string.\n`
+      );
+      process.exit(1);
+    }
+
+    connStr = buildConnectionString({ host, port, name, sslmode, user, pass });
   }
 
   const tools = process.argv
@@ -2131,15 +2143,6 @@ function main(): void {
     );
     process.exit(1);
   }
-
-  const connStr = buildConnectionString({
-    host,
-    port,
-    name,
-    sslmode,
-    user,
-    pass
-  });
 
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 

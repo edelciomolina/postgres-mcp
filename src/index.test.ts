@@ -288,3 +288,46 @@ describe("isWriteOperation", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// DATABASE_URL / MCP_KEY_URL support (resolveCredential covers the lookup;
+// the integration is tested here via the helper directly)
+// ---------------------------------------------------------------------------
+describe("DATABASE_URL support via resolveCredential", () => {
+  test("resolves DATABASE_URL from dotenv when no MCP_KEY_URL is set", () => {
+    const envVars: Record<string, string> = {};
+    const dotenv = { DATABASE_URL: "postgresql://user:pass@host:5432/mydb" };
+    expect(
+      resolveCredential(envVars, dotenv, "MCP_KEY_URL", "DATABASE_URL")
+    ).toBe("postgresql://user:pass@host:5432/mydb");
+  });
+
+  test("resolves custom URL key when MCP_KEY_URL is mapped", () => {
+    const envVars = { MCP_KEY_URL: "DB_URL" };
+    const dotenv = {
+      DB_URL: "postgresql://admin:secret@db.example.com:5432/prod"
+    };
+    expect(
+      resolveCredential(envVars, dotenv, "MCP_KEY_URL", "DATABASE_URL")
+    ).toBe("postgresql://admin:secret@db.example.com:5432/prod");
+  });
+
+  test("returns empty string when neither DATABASE_URL nor MCP_KEY_URL is set", () => {
+    const envVars: Record<string, string> = {};
+    const dotenv: Record<string, string> = {};
+    expect(
+      resolveCredential(envVars, dotenv, "MCP_KEY_URL", "DATABASE_URL")
+    ).toBe("");
+  });
+
+  test("MCP_KEY_URL mapping takes precedence over DATABASE_URL", () => {
+    const envVars = { MCP_KEY_URL: "CUSTOM_URL" };
+    const dotenv = {
+      CUSTOM_URL: "postgresql://user:pass@custom:5432/db",
+      DATABASE_URL: "postgresql://other:other@other:5432/other"
+    };
+    expect(
+      resolveCredential(envVars, dotenv, "MCP_KEY_URL", "DATABASE_URL")
+    ).toBe("postgresql://user:pass@custom:5432/db");
+  });
+});

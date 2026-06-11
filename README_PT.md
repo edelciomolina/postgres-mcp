@@ -68,6 +68,8 @@ Sem necessidade de instalação. O `npx` baixa e executa o pacote sob demanda. A
 
 Isso inicia o servidor com o **conjunto padrão de ferramentas somente leitura** - não são necessários argumentos `tool=`. Para habilitar ferramentas com capacidade de escrita, veja [Ferramentas com escrita](#com-capacidade-de-escrita-opt-in-via-argumento-tool).
 
+> 💡 **Usando Supabase, Neon, Railway ou outra plataforma que fornece apenas uma connection string?** Use `MCP_KEY_URL` apontando para `DATABASE_URL` (ou o nome da variável que a plataforma usa). O servidor priorizará a URL e ignorará as variáveis individuais. Veja [Conexão via URL](#-conexão-via-url-database_url).
+
 ---
 
 ### Opção 2 - Instalar via VS Code (marketplace de extensões MCP)
@@ -160,12 +162,15 @@ O bloco `env` **não** contém as credenciais reais. Ele mapeia cada `MCP_KEY_*`
 
 | Chave em `env`    | Aponta para variável `.env` | Exemplo de valor         |
 |-------------------|-----------------------------|--------------------------|
+| `MCP_KEY_URL`     | `DATABASE_URL`              | `postgresql://user:pass@host:5432/db?sslmode=require` |
 | `MCP_KEY_HOST`    | `DB_HOST`                   | `db.exemplo.supabase.co` |
 | `MCP_KEY_PORT`    | `DB_PORT`                   | `5432`                   |
 | `MCP_KEY_NAME`    | `DB_NAME`                   | `postgres`               |
 | `MCP_KEY_SSLMODE` | `DB_SSLMODE`                | `require`                |
 | `MCP_KEY_USER`    | `DB_USER`                   | `readonly_user`          |
 | `MCP_KEY_PASS`    | `DB_PASS`                   | `segredo`                |
+
+> **Prioridade:** quando `MCP_KEY_URL` (ou `DATABASE_URL`) está presente, o servidor usa a URL diretamente e **ignora** as demais chaves individuais.
 
 Essa indireção permite que você use **qualquer nome de variável** no seu `.env` - útil quando compartilha um `.env` entre múltiplos serviços com convenções de nomenclatura diferentes.
 
@@ -186,7 +191,41 @@ Isso torna a lista de ferramentas **explícita e auditável** diretamente no `mc
 
 ---
 
-## 🛡️ Por que somente leitura é o padrão
+## � Conexão via URL (`DATABASE_URL`)
+
+Além das credenciais individuais, você pode fornecer uma **connection string completa** - o formato padrão em plataformas como Supabase, Neon e Railway.
+
+**`.env`:**
+```env
+DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
+```
+
+**`mcp.json`:**
+```json
+{
+  "servers": {
+    "Postgres Tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@edelciomolina/postgres-mcp"],
+      "env": {
+        "MCP_KEY_URL": "DATABASE_URL"
+      }
+    }
+  }
+}
+```
+
+A variável mapeada por `MCP_KEY_URL` tem **prioridade** sobre as demais chaves (`MCP_KEY_HOST`, `MCP_KEY_PORT`, etc.). Se a URL estiver presente, as outras variáveis são ignoradas.
+
+Caso a plataforma use um nome diferente (ex.: `DB_URL`), basta ajustar o mapeamento:
+```json
+"MCP_KEY_URL": "DB_URL"
+```
+
+---
+
+## �🛡️ Por que somente leitura é o padrão
 
 Se você omitir todos os argumentos `tool=`, o servidor inicia com um **conjunto somente leitura curado** - todas as ferramentas que podem recuperar, analisar ou explicar dados, mas nada que possa modificá-los.
 
