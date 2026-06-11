@@ -19,10 +19,6 @@
   "bin": {
     "postgres-mcp": "./dist/index.js"
   },
-  "files": [
-    "dist/",
-    "README.md"
-  ],
   "contributes": {
     "mcpServerDefinitionProviders": [
       {

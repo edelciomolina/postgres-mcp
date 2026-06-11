@@ -1,0 +1,28 @@
+# VS Code extension entrypoint — not needed in the npm package
+dist/extension.js
+dist/extension.js.map
+
+# Test build artifacts
+dist/index.test.js
+dist/index.test.js.map
+
+# TypeScript source and config
+src/
+tsconfig.json
+vitest.config.ts
+
+# Scripts and tooling
+scripts/
+
+# VS Code extension files
+.vscodeignore
+icon.png
+
+# MCP Registry manifest
+server.json
+
+# Documentation not needed at runtime
+ARCHITECT.md
+ARCHITECT_PT.md
+README_PT.md
+PUBLISHING.md
