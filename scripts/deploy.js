@@ -64,20 +64,22 @@ function deploy(release = "minor", runCommand = run) {
         writeFileSync(pkgPath, pkgOriginal);
     }
 
-    // Publish to the MCP Registry.
-    runCommand("npx", ["mcp-publisher", "login", "github"]);
-    runCommand("npx", ["mcp-publisher", "publish"]);
-
     console.log("\n" + "=".repeat(60));
     console.log(`Published v${newVersion} successfully!`);
     console.log(`  VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=edelciomolina.postgres-mcp`);
     console.log(`  npm: https://www.npmjs.com/package/@edelciomolina/postgres-mcp`);
     console.log("=".repeat(60));
-    console.log("\nGit steps remaining — run manually:");
-    console.log(`  git add .`);
-    console.log(`  git commit -m "chore(release): v${newVersion}"`);
-    console.log(`  git tag v${newVersion}`);
-    console.log(`  git push --follow-tags`);
+    console.log("\nRemaining manual steps:");
+    console.log("");
+    console.log("  1. Git commit and push:");
+    console.log(`     git add .`);
+    console.log(`     git commit -m "chore(release): v${newVersion}"`);
+    console.log(`     git tag v${newVersion}`);
+    console.log(`     git push --follow-tags`);
+    console.log("");
+    console.log("  2. MCP Registry (via https://registry.modelcontextprotocol.io):");
+    console.log(`     Verify that v${newVersion} appears after the npm publish propagates.`);
+    console.log(`     The registry auto-syncs from npm for packages with a server.json.`);
     console.log("");
 }
 
