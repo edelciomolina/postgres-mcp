@@ -1,63 +1,110 @@
 const { spawnSync } = require("child_process");
-const { readFileSync, writeFileSync } = require("fs");
+const { readFileSync, writeFileSync, unlinkSync } = require("fs");
 const path = require("path");
 
+const ROOT = path.join(__dirname, "..");
+const IS_WIN = process.platform === "win32";
 const validRelease = /^(patch|minor|major|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 
-function deploy(release = "minor", runCommand = run) {
+// ---------------------------------------------------------------------------
+// deploy — single entry point
+// ---------------------------------------------------------------------------
+function deploy(release = "minor") {
     if (!isValidRelease(release)) {
         throw new Error(`Invalid release "${release}". Use patch, minor, major or an explicit semver.`);
     }
 
-    const root = path.join(__dirname, "..");
-    const pkgPath = path.join(root, "package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    run("npm", ["run", "check"]);
+
+    const pkg = readPkg();
     const newVersion = bumpVersion(pkg.version, release);
+    const tag = `v${newVersion}`;
 
-    runCommand("npm", ["run", "check"]);
+    updateServerJson(newVersion);
+    run("npm", ["version", release, "--no-git-tag-version"]);
+    run("git", ["add", "package.json", "server.json"]);
+    run("git", ["commit", "-m", `chore(release): ${tag}`]);
+    run("git", ["tag", tag]);
 
-    // Update server.json before vsce runs so that `npm version` (git commit -a)
-    // picks up both package.json and server.json in the same release commit.
-    updateServerJson(newVersion, root);
+    publishVsce(newVersion);
+    publishNpm();
+    publishMcpRegistry();
 
-    // vsce requires `name` to be a plain identifier (no @scope/ prefix).
-    // Temporarily patch package.json for the vsce publish step, then restore it.
-    const vsceNamePkg = { ...pkg, name: vsceExtensionName(pkg.name) };
-    writeFileSync(pkgPath, JSON.stringify(vsceNamePkg, null, 2) + "\n");
+    run("git", ["push", "--follow-tags"]);
+}
+
+// ---------------------------------------------------------------------------
+// Publish helpers — each is idempotent (safe to re-run)
+// ---------------------------------------------------------------------------
+function publishVsce(version) {
+    const pkg = readPkg();
+    const plainName = vsceExtensionName(pkg.name);
+    const vsixPath = path.join(ROOT, `${plainName}-${version}.vsix`);
+
+    // Temporarily patch name for vsce (no @scope/ allowed).
+    writeFileSync(
+        path.join(ROOT, "package.json"),
+        JSON.stringify({ ...pkg, name: plainName }, null, 2) + "\n"
+    );
     try {
-        // Publish to VS Code Marketplace — bumps package.json, creates the release
-        // commit and tag, then uploads the VSIX.
-        runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
+        run(vsceCmd(), ["package", "--out", vsixPath]);
     } finally {
-        // Restore scoped name so npm publish and git history are correct.
-        const updatedPkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-        updatedPkg.name = pkg.name;
-        writeFileSync(pkgPath, JSON.stringify(updatedPkg, null, 2) + "\n");
+        run("git", ["checkout", "--", "package.json"]);
     }
 
-    // Publish the npm package (uses the version already bumped by vsce above).
-    runCommand("npm", ["publish", "--access", "public"]);
+    // Publish the VSIX. Skip if already published.
+    const r = exec(vsceCmd(), ["publish", "--packagePath", vsixPath], { timeout: 120_000 });
+    try { unlinkSync(vsixPath); } catch (_) { }
+    if (r.status !== 0) {
+        const err = r.stderr || "";
+        if (/already exists/i.test(err)) {
+            log("VS Code Marketplace already has this version — skipping.");
+            return;
+        }
+        if (err) process.stderr.write(err);
+        throw new Error(`vsce publish failed (exit ${r.status})`);
+    }
+}
 
-    // Publish to the MCP Registry.
-    runCommand("npx", ["mcp-publisher", "login", "github"]);
-    runCommand("npx", ["mcp-publisher", "publish"]);
+function publishNpm() {
+    const r = exec("npm", ["publish", "--access", "public", "--ignore-scripts"]);
+    if (r.status !== 0) {
+        const err = r.stderr || "";
+        if (/cannot publish over the previously published/i.test(err)) {
+            log("npm already has this version — skipping.");
+            return;
+        }
+        if (err) process.stderr.write(err);
+        throw new Error(`npm publish failed (exit ${r.status})`);
+    }
+}
 
-    // Push commits and tags to GitHub.
-    runCommand("git", ["push", "--follow-tags"]);
+function publishMcpRegistry() {
+    try {
+        run("npx", ["mcp-publisher", "login", "github"], 120_000);
+        run("npx", ["mcp-publisher", "publish"], 60_000);
+    } catch (err) {
+        log(`mcp-publisher failed (non-fatal): ${err.message}`);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function readPkg() {
+    return JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
 }
 
 function bumpVersion(current, release) {
-    if (/^\d+\.\d+\.\d+/.test(release)) {
-        return release;
-    }
+    if (/^\d+\.\d+\.\d+/.test(release)) return release;
     const [major, minor, patch] = current.split(".").map(Number);
     if (release === "major") return `${major + 1}.0.0`;
     if (release === "minor") return `${major}.${minor + 1}.0`;
     return `${major}.${minor}.${patch + 1}`;
 }
 
-function updateServerJson(version, root) {
-    const file = path.join(root, "server.json");
+function updateServerJson(version) {
+    const file = path.join(ROOT, "server.json");
     const s = JSON.parse(readFileSync(file, "utf8"));
     s.version = version;
     s.packages[0].version = version;
@@ -68,46 +115,57 @@ function isValidRelease(release) {
     return validRelease.test(release);
 }
 
-/**
- * vsce requires `name` to be a plain identifier with no @scope/ prefix.
- * Strips the scope if present: "@edelciomolina/postgres-mcp" → "postgres-mcp".
- */
 function vsceExtensionName(name) {
     return name.replace(/^@[^/]+\//, "");
 }
 
-function vsceExecutable(platform = process.platform) {
-    return path.join(
-        __dirname,
-        "..",
-        "node_modules",
-        ".bin",
-        platform === "win32" ? "vsce.cmd" : "vsce"
-    );
+function vsceCmd() {
+    return path.join(ROOT, "node_modules", ".bin", IS_WIN ? "vsce.cmd" : "vsce");
 }
 
-function run(command, args, spawn = spawnSync, platform = process.platform) {
-    const result = spawn(command, args, {
-        cwd: path.join(__dirname, ".."),
+function needsShell(cmd) {
+    return IS_WIN && (cmd === "npm" || cmd === "npx" || cmd.endsWith(".cmd"));
+}
+
+/** Run a command, inherit stdio, throw on failure. */
+function run(command, args, timeout) {
+    const result = spawnSync(command, args, {
+        cwd: ROOT,
         stdio: "inherit",
-        shell: platform === "win32" && (command === "npm" || command.endsWith(".cmd"))
+        shell: needsShell(command),
+        timeout
     });
-
-    if (result.error) {
-        throw result.error;
-    }
-
+    if (result.error) throw result.error;
     if (result.status !== 0) {
-        throw new Error(`Command failed with exit code ${result.status || 1}: ${command}`);
+        throw new Error(`Command failed (exit ${result.status}): ${command} ${args.join(" ")}`);
     }
 }
 
-function main(args = process.argv.slice(2), logger = console, deployAction = deploy) {
+/** Run a command, capture stderr, return result object. Does NOT throw. */
+function exec(command, args, opts = {}) {
+    const result = spawnSync(command, args, {
+        cwd: ROOT,
+        stdio: ["ignore", "inherit", "pipe"],
+        shell: needsShell(command),
+        ...opts
+    });
+    if (result.error) throw result.error;
+    return { status: result.status, stderr: result.stderr ? result.stderr.toString() : "" };
+}
+
+function log(msg) {
+    process.stderr.write(`[deploy] ${msg}\n`);
+}
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+function main(args = process.argv.slice(2)) {
     try {
-        deployAction(args[0]);
+        deploy(args[0]);
         return 0;
     } catch (error) {
-        logger.error(error.message);
+        console.error(error.message);
         return 1;
     }
 }
@@ -116,4 +174,4 @@ if (require.main === module) {
     process.exitCode = main();
 }
 
-module.exports = { deploy, bumpVersion, updateServerJson, isValidRelease, vsceExtensionName, main, run, vsceExecutable };
+module.exports = { deploy, bumpVersion, updateServerJson, isValidRelease, vsceExtensionName, main, run };
