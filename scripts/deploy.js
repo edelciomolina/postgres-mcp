@@ -37,20 +37,20 @@ function deploy(release = "minor", runCommand = run) {
     checkPrerequisites();
     runCommand("npm", ["run", "check"]);
 
-    // Publish to VS Code Marketplace — bumps package.json, creates the release
-    // commit and tag, then uploads the VSIX. The working tree must be clean here.
-    runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
+    // Bump version in package.json without git commit/tag (vsce --no-git-tag-version).
+    const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    const newVersion = bumpVersion(pkg.version, release);
 
-    // Read the version that vsce just bumped into package.json.
+    // Update server.json to match.
+    updateServerJson(newVersion, root);
+
+    // Publish to VS Code Marketplace — bumps package.json and uploads the VSIX.
+    // --no-git-tag-version prevents vsce from running npm version (which does git commit+tag).
+    runCommand(vsceExecutable(), ["publish", release, "--no-git-tag-version"]);
+
+    // Re-read package.json after vsce bumped it.
     const pkgPath = path.join(root, "package.json");
     const pkgOriginal = readFileSync(pkgPath, "utf8");
-    const newVersion = JSON.parse(pkgOriginal).version;
-
-    // Update server.json and amend the release commit to include it, then move the tag.
-    updateServerJson(newVersion, root);
-    runCommand("git", ["add", "server.json"]);
-    runCommand("git", ["commit", "--amend", "--no-edit"]);
-    runCommand("git", ["tag", "-f", `v${newVersion}`]);
 
     // Publish the npm package under the scoped name @edelciomolina/postgres-mcp.
     // package.json uses "postgres-mcp" for VS Code, so we patch it temporarily.
@@ -60,7 +60,7 @@ function deploy(release = "minor", runCommand = run) {
     try {
         runCommand("npm", ["publish", "--access", "public", "--ignore-scripts"]);
     } finally {
-        // Restore so the working tree matches the committed state before git push.
+        // Restore so the working tree matches the committed state.
         writeFileSync(pkgPath, pkgOriginal);
     }
 
@@ -68,8 +68,17 @@ function deploy(release = "minor", runCommand = run) {
     runCommand("npx", ["mcp-publisher", "login", "github"]);
     runCommand("npx", ["mcp-publisher", "publish"]);
 
-    // Push commits and tags to GitHub.
-    runCommand("git", ["push", "--follow-tags"]);
+    console.log("\n" + "=".repeat(60));
+    console.log(`Published v${newVersion} successfully!`);
+    console.log(`  VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=edelciomolina.postgres-mcp`);
+    console.log(`  npm: https://www.npmjs.com/package/@edelciomolina/postgres-mcp`);
+    console.log("=".repeat(60));
+    console.log("\nGit steps remaining — run manually:");
+    console.log(`  git add .`);
+    console.log(`  git commit -m "chore(release): v${newVersion}"`);
+    console.log(`  git tag v${newVersion}`);
+    console.log(`  git push --follow-tags`);
+    console.log("");
 }
 
 function bumpVersion(current, release) {
@@ -108,7 +117,7 @@ function run(command, args, spawn = spawnSync, platform = process.platform) {
     const result = spawn(command, args, {
         cwd: path.join(__dirname, ".."),
         stdio: "inherit",
-        shell: platform === "win32" && (command === "npm" || command.endsWith(".cmd"))
+        shell: platform === "win32" && (command === "npm" || command === "npx" || command.endsWith(".cmd"))
     });
 
     if (result.error) {
