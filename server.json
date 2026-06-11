@@ -16,12 +16,12 @@
       ]
     }
   ],
-  "version": "1.0.13",
+  "version": "1.1.0",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@edelciomolina/postgres-mcp",
-      "version": "1.0.13",
+      "identifier": "postgres-mcp",
+      "version": "1.1.0",
       "transport": {
         "type": "stdio"
       },

@@ -1,8 +1,21 @@
 {
-  "name": "@edelciomolina/postgres-mcp",
+  "name": "postgres-mcp",
   "version": "1.0.13",
   "mcpName": "io.github.edelciomolina/postgres-mcp",
   "description": "MCP server wrapper for PostgreSQL - reads credentials from .env with configurable key mapping and safe read-only defaults.",
+  "publisher": "edelciomolina",
+  "displayName": "Postgres MCP",
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "icon": "icon.png",
   "bin": {
     "postgres-mcp": "./dist/index.js"
   },
@@ -10,11 +23,57 @@
     "dist/",
     "README.md"
   ],
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "postgres-mcp",
+        "label": "Postgres MCP"
+      }
+    ],
+    "configuration": {
+      "title": "Postgres MCP",
+      "properties": {
+        "postgresMcp.keyHost": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds the database host. Leave empty to use the default: DB_HOST. (Sets MCP_KEY_HOST)"
+        },
+        "postgresMcp.keyPort": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds the database port. Leave empty to use the default: DB_PORT. (Sets MCP_KEY_PORT)"
+        },
+        "postgresMcp.keyName": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds the database name. Leave empty to use the default: DB_NAME. (Sets MCP_KEY_NAME)"
+        },
+        "postgresMcp.keyUser": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds the database user. Leave empty to use the default: DB_USER. (Sets MCP_KEY_USER)"
+        },
+        "postgresMcp.keyPass": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds the database password. Leave empty to use the default: DB_PASS. (Sets MCP_KEY_PASS)"
+        },
+        "postgresMcp.keySslMode": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds the SSL mode (e.g. require). Leave empty to use the default: DB_SSLMODE. (Sets MCP_KEY_SSLMODE)"
+        }
+      }
+    }
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy:mcp": "npm version patch --no-git-tag-version && node -e \"const fs=require('fs'),p=require('./package.json'),s=JSON.parse(fs.readFileSync('server.json','utf8'));s.version=p.version;s.packages[0].version=p.version;fs.writeFileSync('server.json',JSON.stringify(s,null,2)+'\\n');\" && npm publish --access public && mcp-publisher login github && mcp-publisher publish",
+    "check": "npm run build && npm run test",
+    "package": "npm run check && vsce package",
+    "publish": "node scripts/deploy.js",
+    "vscode:prepublish": "npm run check",
     "status:mcp": "curl -s \"https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.edelciomolina/postgres-mcp\" | python3 -m json.tool"
   },
   "dependencies": {
@@ -25,12 +84,15 @@
   "devDependencies": {
     "@types/node": "^20.19.42",
     "@types/pg": "^8.20.0",
+    "@types/vscode": "^1.120.0",
+    "@vscode/vsce": "^3.9.2",
     "tsx": "^4.22.4",
     "typescript": "^5.0.0",
     "vitest": "^4.1.8"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18",
+    "vscode": "^1.120.0"
   },
   "author": "Edelcio Molina <https://github.com/edelciomolina>",
   "license": "MIT",

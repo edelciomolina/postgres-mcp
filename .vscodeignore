@@ -1,0 +1,24 @@
+# Exclude MCP server build artifacts (served via npx, not bundled in VSIX)
+dist/index.js
+dist/index.js.map
+dist/index.d.ts
+dist/index.test.js
+dist/index.test.js.map
+
+# TypeScript source and config
+src/
+tsconfig.json
+vitest.config.ts
+
+# MCP Registry manifest (not needed in VSIX)
+server.json
+
+# Architecture docs (not needed in VSIX)
+ARCHITECT.md
+ARCHITECT_PT.md
+README_PT.md
+
+# Dev files
+.vscode/
+node_modules/
+*.test.ts
