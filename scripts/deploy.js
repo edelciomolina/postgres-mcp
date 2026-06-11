@@ -15,9 +15,10 @@ function deploy(release = "minor", runCommand = run) {
 
     runCommand("npm", ["run", "check"]);
 
-    // Update server.json before vsce runs so that `npm version` (git commit -a)
-    // picks up both package.json and server.json in the same release commit.
+    // Update server.json and stage it so `npm version` (git commit -a) picks up
+    // both package.json and server.json in the same release commit.
     updateServerJson(newVersion, root);
+    runCommand("git", ["add", "server.json"]);
 
     // Publish to VS Code Marketplace — bumps package.json, creates the release
     // commit and tag, then uploads the VSIX.
