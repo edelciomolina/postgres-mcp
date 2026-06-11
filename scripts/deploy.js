@@ -4,6 +4,29 @@ const path = require("path");
 
 const validRelease = /^(patch|minor|major|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 
+function checkPrerequisites() {
+    // Check npm authentication
+    const npmWhoami = spawnSync("npm", ["whoami"], { encoding: "utf8", shell: process.platform === "win32" });
+    if (npmWhoami.status !== 0) {
+        throw new Error(
+            "Not logged in to npm. Run:\n\n  npm login\n\nThen retry npm run publish."
+        );
+    }
+
+    // Check vsce authentication
+    const vsceExe = vsceExecutable();
+    const vsceWhoami = spawnSync(vsceExe, ["verify-pat", "edelciomolina"], {
+        cwd: path.join(__dirname, ".."),
+        encoding: "utf8",
+        shell: process.platform === "win32"
+    });
+    if (vsceWhoami.status !== 0) {
+        throw new Error(
+            "Not logged in to vsce. Run:\n\n  npx vsce login edelciomolina\n\nThen retry npm run publish."
+        );
+    }
+}
+
 function deploy(release = "minor", runCommand = run) {
     if (!isValidRelease(release)) {
         throw new Error(`Invalid release "${release}". Use patch, minor, major or an explicit semver.`);
@@ -11,6 +34,7 @@ function deploy(release = "minor", runCommand = run) {
 
     const root = path.join(__dirname, "..");
 
+    checkPrerequisites();
     runCommand("npm", ["run", "check"]);
 
     // Publish to VS Code Marketplace — bumps package.json, creates the release
