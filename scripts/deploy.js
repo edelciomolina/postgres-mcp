@@ -58,7 +58,7 @@ function deploy(release = "minor", runCommand = run) {
     pkgForNpm.name = "@edelciomolina/postgres-mcp";
     writeFileSync(pkgPath, JSON.stringify(pkgForNpm, null, 2) + "\n");
     try {
-        runCommand("npm", ["publish", "--access", "public"]);
+        runCommand("npm", ["publish", "--access", "public", "--ignore-scripts"]);
     } finally {
         // Restore so the working tree matches the committed state before git push.
         writeFileSync(pkgPath, pkgOriginal);
