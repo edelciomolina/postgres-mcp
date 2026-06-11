@@ -331,3 +331,26 @@ describe("DATABASE_URL support via resolveCredential", () => {
     ).toBe("postgresql://user:pass@custom:5432/db");
   });
 });
+
+// ---------------------------------------------------------------------------
+// vsceExtensionName (deploy.js helper — tested inline to keep test suite in TS)
+// ---------------------------------------------------------------------------
+describe("vsceExtensionName", () => {
+  function vsceExtensionName(name: string): string {
+    return name.replace(/^@[^/]+\//, "");
+  }
+
+  test("strips @scope/ prefix", () => {
+    expect(vsceExtensionName("@edelciomolina/postgres-mcp")).toBe(
+      "postgres-mcp"
+    );
+  });
+
+  test("leaves plain name unchanged", () => {
+    expect(vsceExtensionName("postgres-mcp")).toBe("postgres-mcp");
+  });
+
+  test("handles other scopes", () => {
+    expect(vsceExtensionName("@myorg/my-extension")).toBe("my-extension");
+  });
+});

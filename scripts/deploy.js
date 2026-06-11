@@ -10,7 +10,8 @@ function deploy(release = "minor", runCommand = run) {
     }
 
     const root = path.join(__dirname, "..");
-    const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    const pkgPath = path.join(root, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
     const newVersion = bumpVersion(pkg.version, release);
 
     runCommand("npm", ["run", "check"]);
@@ -19,9 +20,20 @@ function deploy(release = "minor", runCommand = run) {
     // picks up both package.json and server.json in the same release commit.
     updateServerJson(newVersion, root);
 
-    // Publish to VS Code Marketplace — bumps package.json, creates the release
-    // commit and tag, then uploads the VSIX.
-    runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
+    // vsce requires `name` to be a plain identifier (no @scope/ prefix).
+    // Temporarily patch package.json for the vsce publish step, then restore it.
+    const vsceNamePkg = { ...pkg, name: vsceExtensionName(pkg.name) };
+    writeFileSync(pkgPath, JSON.stringify(vsceNamePkg, null, 2) + "\n");
+    try {
+        // Publish to VS Code Marketplace — bumps package.json, creates the release
+        // commit and tag, then uploads the VSIX.
+        runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
+    } finally {
+        // Restore scoped name so npm publish and git history are correct.
+        const updatedPkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+        updatedPkg.name = pkg.name;
+        writeFileSync(pkgPath, JSON.stringify(updatedPkg, null, 2) + "\n");
+    }
 
     // Publish the npm package (uses the version already bumped by vsce above).
     runCommand("npm", ["publish", "--access", "public"]);
@@ -54,6 +66,14 @@ function updateServerJson(version, root) {
 
 function isValidRelease(release) {
     return validRelease.test(release);
+}
+
+/**
+ * vsce requires `name` to be a plain identifier with no @scope/ prefix.
+ * Strips the scope if present: "@edelciomolina/postgres-mcp" → "postgres-mcp".
+ */
+function vsceExtensionName(name) {
+    return name.replace(/^@[^/]+\//, "");
 }
 
 function vsceExecutable(platform = process.platform) {
@@ -96,4 +116,4 @@ if (require.main === module) {
     process.exitCode = main();
 }
 
-module.exports = { deploy, bumpVersion, updateServerJson, isValidRelease, main, run, vsceExecutable };
+module.exports = { deploy, bumpVersion, updateServerJson, isValidRelease, vsceExtensionName, main, run, vsceExecutable };
