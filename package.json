@@ -1,6 +1,6 @@
 {
-  "name": "postgres-mcp",
-  "version": "1.7.0",
+  "name": "@edelciomolina/postgres-mcp",
+  "version": "1.0.13",
   "mcpName": "io.github.edelciomolina/postgres-mcp",
   "description": "MCP server wrapper for PostgreSQL - reads credentials from .env with configurable key mapping and safe read-only defaults.",
   "publisher": "edelciomolina",
@@ -19,6 +19,10 @@
   "bin": {
     "postgres-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "contributes": {
     "mcpServerDefinitionProviders": [
       {
@@ -29,6 +33,11 @@
     "configuration": {
       "title": "Postgres MCP",
       "properties": {
+        "postgresMcp.keyUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the .env variable that holds a full connection URL (e.g. postgresql://user:pass@host:port/db). Leave empty to use the default: DATABASE_URL. When set, individual host/port/user/pass keys are ignored. (Sets MCP_KEY_URL)"
+        },
         "postgresMcp.keyHost": {
           "type": "string",
           "default": "",
@@ -88,7 +97,7 @@
   },
   "engines": {
     "node": ">=18",
-    "vscode": "^1.120.0"
+    "vscode": "^1.101.0"
   },
   "author": "Edelcio Molina <https://github.com/edelciomolina>",
   "license": "MIT",

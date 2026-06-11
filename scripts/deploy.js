@@ -1,108 +1,37 @@
 const { spawnSync } = require("child_process");
 const { readFileSync, writeFileSync } = require("fs");
-const { createInterface } = require("readline");
 const path = require("path");
 
 const validRelease = /^(patch|minor|major|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 
-function checkPrerequisites() {
-    // Check npm authentication
-    const npmWhoami = spawnSync("npm", ["whoami"], { encoding: "utf8", shell: process.platform === "win32" });
-    if (npmWhoami.status !== 0) {
-        throw new Error(
-            "Not logged in to npm. Run:\n\n  npm login\n\nThen retry npm run publish."
-        );
-    }
-
-    // Check vsce authentication
-    const vsceExe = vsceExecutable();
-    const vsceWhoami = spawnSync(vsceExe, ["verify-pat", "edelciomolina"], {
-        cwd: path.join(__dirname, ".."),
-        encoding: "utf8",
-        shell: process.platform === "win32"
-    });
-    if (vsceWhoami.status !== 0) {
-        throw new Error(
-            "Not logged in to vsce. Run:\n\n  npx vsce login edelciomolina\n\nThen retry npm run publish."
-        );
-    }
-}
-
-function ask(prompt) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise(resolve => rl.question(prompt, answer => { rl.close(); resolve(answer.trim()); }));
-}
-
-async function deploy(release = "minor", runCommand = run) {
+function deploy(release = "minor", runCommand = run) {
     if (!isValidRelease(release)) {
         throw new Error(`Invalid release "${release}". Use patch, minor, major or an explicit semver.`);
     }
 
     const root = path.join(__dirname, "..");
-
-    checkPrerequisites();
-    runCommand("npm", ["run", "check"]);
-
-    // Bump version in package.json without git commit/tag (vsce --no-git-tag-version).
     const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
     const newVersion = bumpVersion(pkg.version, release);
 
-    // Update server.json to match.
+    runCommand("npm", ["run", "check"]);
+
+    // Update server.json before vsce runs so that `npm version` (git commit -a)
+    // picks up both package.json and server.json in the same release commit.
     updateServerJson(newVersion, root);
 
-    // Publish to VS Code Marketplace — bumps package.json and uploads the VSIX.
-    // --no-git-tag-version prevents vsce from running npm version (which does git commit+tag).
-    runCommand(vsceExecutable(), ["publish", release, "--no-git-tag-version"]);
+    // Publish to VS Code Marketplace — bumps package.json, creates the release
+    // commit and tag, then uploads the VSIX.
+    runCommand(vsceExecutable(), ["publish", release, "--message", "chore(release): %s"]);
 
-    // Re-read package.json after vsce bumped it.
-    const pkgPath = path.join(root, "package.json");
-    const pkgOriginal = readFileSync(pkgPath, "utf8");
+    // Publish the npm package (uses the version already bumped by vsce above).
+    runCommand("npm", ["publish", "--access", "public"]);
 
-    // Publish the npm package under the scoped name @edelciomolina/postgres-mcp.
-    // package.json uses "postgres-mcp" for VS Code, so we patch it temporarily.
-    const pkgForNpm = JSON.parse(pkgOriginal);
-    pkgForNpm.name = "@edelciomolina/postgres-mcp";
-    writeFileSync(pkgPath, JSON.stringify(pkgForNpm, null, 2) + "\n");
-    try {
-        runCommand("npm", ["publish", "--access", "public", "--ignore-scripts"]);
-    } finally {
-        // Restore so the working tree matches the committed state.
-        writeFileSync(pkgPath, pkgOriginal);
-    }
+    // Publish to the MCP Registry.
+    runCommand("npx", ["mcp-publisher", "login", "github"]);
+    runCommand("npx", ["mcp-publisher", "publish"]);
 
-    // Publish to the MCP Registry using the native mcp-publisher CLI.
-    const publisherInstalled = spawnSync("mcp-publisher", ["--help"], {
-        encoding: "utf8",
-        shell: process.platform === "win32"
-    });
-    if (publisherInstalled.status === 0) {
-        runCommand("mcp-publisher", ["publish"]);
-    } else {
-        console.log("\n  [!] mcp-publisher CLI not found — skipping MCP Registry publish.");
-        console.log("      Install it: https://github.com/modelcontextprotocol/registry#publishing-a-server");
-        console.log("      Then run:   mcp-publisher login github && mcp-publisher publish\n");
-    }
-
-    console.log("\n" + "=".repeat(60));
-    console.log(`Published v${newVersion} successfully!`);
-    console.log(`  VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=edelciomolina.postgres-mcp`);
-    console.log(`  npm: https://www.npmjs.com/package/@edelciomolina/postgres-mcp`);
-    console.log("=".repeat(60));
-
-    const doGit = await ask(`\nCommit and push "chore(release): v${newVersion}"? [Y/n] `);
-    if (doGit.toLowerCase() !== "n") {
-        runCommand("git", ["add", "."]);
-        runCommand("git", ["commit", "-m", `chore(release): v${newVersion}`]);
-        runCommand("git", ["tag", `v${newVersion}`]);
-        runCommand("git", ["push", "--follow-tags"]);
-        console.log("\nGit commit, tag, and push completed.");
-    } else {
-        console.log("\nManual git steps:");
-        console.log(`  git add .`);
-        console.log(`  git commit -m "chore(release): v${newVersion}"`);
-        console.log(`  git tag v${newVersion}`);
-        console.log(`  git push --follow-tags`);
-    }
+    // Push commits and tags to GitHub.
+    runCommand("git", ["push", "--follow-tags"]);
 }
 
 function bumpVersion(current, release) {
@@ -141,7 +70,7 @@ function run(command, args, spawn = spawnSync, platform = process.platform) {
     const result = spawn(command, args, {
         cwd: path.join(__dirname, ".."),
         stdio: "inherit",
-        shell: platform === "win32" && (command === "npm" || command === "npx" || command === "mcp-publisher" || command.endsWith(".cmd"))
+        shell: platform === "win32" && (command === "npm" || command.endsWith(".cmd"))
     });
 
     if (result.error) {
@@ -153,9 +82,9 @@ function run(command, args, spawn = spawnSync, platform = process.platform) {
     }
 }
 
-async function main(args = process.argv.slice(2), logger = console, deployAction = deploy) {
+function main(args = process.argv.slice(2), logger = console, deployAction = deploy) {
     try {
-        await deployAction(args[0]);
+        deployAction(args[0]);
         return 0;
     } catch (error) {
         logger.error(error.message);
@@ -164,7 +93,7 @@ async function main(args = process.argv.slice(2), logger = console, deployAction
 }
 
 if (require.main === module) {
-    main().then(code => { process.exitCode = code; });
+    process.exitCode = main();
 }
 
 module.exports = { deploy, bumpVersion, updateServerJson, isValidRelease, main, run, vsceExecutable };
