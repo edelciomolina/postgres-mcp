@@ -1,300 +1,153 @@
-> 🌐 **English** | [Português](README_PT.md)
+# MCP Registry
 
-<table border="0" cellspacing="0" cellpadding="0">
-  <tr>
-    <td width="110">
-      <img src="https://raw.githubusercontent.com/edelciomolina/postgres-mcp/main/icon.png" width="96" alt="Postgres MCP icon"/>
-    </td>
-    <td>
-      <h1>Postgres MCP</h1>
-      <p>🔌 Native MCP server for PostgreSQL - reads credentials from <code>.env</code> at runtime with flexible key mapping, configurable tool selection, and <strong>safe read-only defaults</strong>.</p>
-      <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/v/@edelciomolina/postgres-mcp" alt="npm version"/></a>
-      <a href="https://www.npmjs.com/package/@edelciomolina/postgres-mcp"><img src="https://img.shields.io/npm/l/%40edelciomolina%2Fpostgres-mcp" alt="license"/></a>
-      <a href="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/edelciomolina/postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
-    </td>
-  </tr>
-</table>
+The MCP registry provides MCP clients with a list of MCP servers, like an app store for MCP servers.
 
----
+[**📤 Publish my MCP server**](docs/modelcontextprotocol-io/quickstart.mdx) | [**⚡️ Live API docs**](https://registry.modelcontextprotocol.io/docs) | [**👀 Ecosystem vision**](docs/design/ecosystem-vision.md) | 📖 **[Full documentation](./docs)**
 
-## ✨ What it does
+## Development Status
 
-This is a **native MCP server** built directly with [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) and [`pg`](https://www.npmjs.com/package/pg) (node-postgres). It provides:
+**2025-10-24 update**: The Registry API has entered an **API freeze (v0.1)** 🎉. For the next month or more, the API will remain stable with no breaking changes, allowing integrators to confidently implement support. This freeze applies to v0.1 while development continues on v0. We'll use this period to validate the API in real-world integrations and gather feedback to shape v1 for general availability. Thank you to everyone for your contributions and patience—your involvement has been key to getting us here!
 
-- 🔐 **Runtime credential resolution** - reads database credentials from your `.env` file at startup, so no secrets are stored in `mcp.json`
-- 🗝️ **Flexible key mapping** - use any `.env` variable names; tell the server which ones to use via `env` in `mcp.json`
-- 🎯 **Explicit tool selection** - pass `tool=<name>` args to choose exactly which MCP tools to expose
-- 🛡️ **Read-only by default** - if no tools are specified, only safe introspection tools are enabled (no writes, no arbitrary SQL execution)
+**2025-09-08 update**: The registry has launched in preview 🎉 ([announcement blog post](https://blog.modelcontextprotocol.io/posts/2025-09-08-mcp-registry-preview/)). While the system is now more stable, this is still a preview release and breaking changes or data resets may occur. A general availability (GA) release will follow later. We'd love your feedback in [GitHub discussions](https://github.com/modelcontextprotocol/registry/discussions/new?category=ideas) or in the [#registry-dev Discord](https://discord.com/channels/1358869848138059966/1369487942862504016) ([joining details here](https://modelcontextprotocol.io/community/communication)).
 
----
+Current key maintainers:
+- **Adam Jones** (Anthropic) [@domdomegg](https://github.com/domdomegg)  
+- **Tadas Antanavicius** (PulseMCP) [@tadasant](https://github.com/tadasant)
+- **Toby Padilla** (GitHub) [@toby](https://github.com/toby)
+- **Radoslav (Rado) Dimitrov** (Stacklok) [@rdimitrov](https://github.com/rdimitrov)
 
-## 📋 Requirements
+## Contributing
 
-- ⚙️ Node.js >= 18
-- 📄 A `.env` file with the database credentials (anywhere in the project tree - see [.env discovery](#-env-file-discovery))
+We use multiple channels for collaboration - see [modelcontextprotocol.io/community/communication](https://modelcontextprotocol.io/community/communication).
 
----
+Often (but not always) ideas flow through this pipeline:
 
-## � Installation
+- **[Discord](https://modelcontextprotocol.io/community/communication)** - Real-time community discussions
+- **[Discussions](https://github.com/modelcontextprotocol/registry/discussions)** - Propose and discuss product/technical requirements
+- **[Issues](https://github.com/modelcontextprotocol/registry/issues)** - Track well-scoped technical work  
+- **[Pull Requests](https://github.com/modelcontextprotocol/registry/pulls)** - Contribute work towards issues
 
-There are two ways to use this package. Choose the one that best fits your workflow.
+### Quick start:
 
-### Option 1 - No install (via `npx`, recommended for quick start)
+#### Pre-requisites
 
-No installation required. `npx` downloads and runs the package on demand. Add `-y` as the first arg to skip the confirmation prompt.
+- **Docker**
+- **Go 1.24.x**
+- **ko** - Container image builder for Go ([installation instructions](https://ko.build/install/))
+- **golangci-lint v2.4.0**
 
-```json
-{
-  "servers": {
-    "Postgres Tools": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@edelciomolina/postgres-mcp"
-      ],
-      "env": {
-        "MCP_KEY_HOST":    "DB_HOST",
-        "MCP_KEY_PORT":    "DB_PORT",
-        "MCP_KEY_NAME":    "DB_NAME",
-        "MCP_KEY_SSLMODE": "DB_SSLMODE",
-        "MCP_KEY_USER":    "DB_USER",
-        "MCP_KEY_PASS":    "DB_PASS"
-      }
-    }
-  }
-}
+#### Running the server
+
+```bash
+# Start full development environment
+make dev-compose
 ```
 
-This starts the server with the **read-only default tool set** - no `tool=` args needed. To enable write-capable tools, see [Write-capable tools](#write-capable-opt-in-via-tool-arg).
+This starts the registry at [`localhost:8080`](http://localhost:8080) with PostgreSQL. The database uses ephemeral storage and is reset each time you restart the containers, ensuring a clean state for development and testing.
 
----
+**Note:** The registry uses [ko](https://ko.build) to build container images. The `make dev-compose` command automatically builds the registry image with ko and loads it into your local Docker daemon before starting the services.
 
-### Option 2 - Install via VS Code (MCP extension marketplace)
+By default, the registry seeds from the production API with a filtered subset of servers (to keep startup fast). This ensures your local environment mirrors production behavior and all seed data passes validation. For offline development you can seed from a file without validation with `MCP_REGISTRY_SEED_FROM=data/seed.json MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION=false make dev-compose`.
 
-VS Code supports discovering and installing MCP servers directly from the editor, without touching the terminal.
+The setup can be configured with environment variables in [docker-compose.yml](./docker-compose.yml) - see [.env.example](./.env.example) for a reference.
 
-1. Open the **Command Palette** (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on Mac / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on Windows/Linux)
-2. Run **`MCP: Add Server`**
-3. Choose **"Browser MCP Servers"** (or **"From registry"**, depending on your VS Code version)
-4. Search for **`postgres-mcp`** or **`edelciomolina`**
-5. Select **Postgres MCP** and follow the prompts - VS Code will add the entry to your `mcp.json` automatically
+<details>
+<summary>Alternative: Running a pre-built Docker image</summary>
 
-> 💡 You can also open the MCP Servers panel via the **Copilot chat icon → Manage MCP Servers** to browse, enable, or disable servers at any time.
+Pre-built Docker images are automatically published to GitHub Container Registry. Note that the image does not bundle PostgreSQL, so you need to run your own and point the registry at it via `MCP_REGISTRY_DATABASE_URL` (see [docker-compose.yml](./docker-compose.yml) for a working example):
 
-After installing, edit the generated entry in `.vscode/mcp.json` to add your `tool=` args and `env` key mappings as shown in the [Usage](#-usage-in-vs-code-mcpjson) section below.
+```bash
+# Run latest stable release
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:latest
 
----
+# Run latest from main branch (continuous deployment)
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:main
 
-## 🚀 Usage in VS Code (`mcp.json`)
+# Run specific release version
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:v1.0.0
 
-**Read-only (default - no `tool=` args needed):**
-
-```json
-{
-  "servers": {
-    "Postgres Tools": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["@edelciomolina/postgres-mcp"],
-      "env": {
-        "MCP_KEY_HOST":    "DB_HOST",
-        "MCP_KEY_PORT":    "DB_PORT",
-        "MCP_KEY_NAME":    "DB_NAME",
-        "MCP_KEY_SSLMODE": "DB_SSLMODE",
-        "MCP_KEY_USER":    "DB_USER",
-        "MCP_KEY_PASS":    "DB_PASS"
-      }
-    }
-  }
-}
+# Run development build from main branch
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:main-20250906-abc123d
 ```
 
-**With write-capable tools (explicit opt-in required):**
+**Available tags:** 
+- **Releases**: `latest`, `v1.0.0`, `v1.1.0`, etc.
+- **Continuous**: `main` (latest main branch build)
+- **Development**: `main-<date>-<sha>` (specific commit builds)
 
-```json
-{
-  "servers": {
-    "Postgres Tools": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "@edelciomolina/postgres-mcp",
-        "tool=pg_manage_schema",
-        "tool=pg_manage_indexes"
-      ],
-      "env": {
-        "POSTGRES_MCP_ALLOW_WRITE": "true",
-        "MCP_KEY_HOST":    "DB_HOST",
-        "MCP_KEY_PORT":    "DB_PORT",
-        "MCP_KEY_NAME":    "DB_NAME",
-        "MCP_KEY_SSLMODE": "DB_SSLMODE",
-        "MCP_KEY_USER":    "DB_USER",
-        "MCP_KEY_PASS":    "DB_PASS"
-      }
-    }
-  }
-}
+</details>
+
+#### Publishing a server
+
+To publish a server, we've built a simple CLI. You can use it with:
+
+```bash
+# Build the latest CLI
+make publisher
+
+# Use it!
+./bin/mcp-publisher --help
 ```
 
-> ⚠️ Write-capable tools require `POSTGRES_MCP_ALLOW_WRITE=true` in `env`. Without it, the server exits on startup.
+See [the publisher guide](./docs/modelcontextprotocol-io/quickstart.mdx) for more details.
 
-The corresponding `.env` in your project root:
+#### Other commands
 
-```env
-DB_HOST=db.your-project.supabase.co
-DB_PORT=5432
-DB_NAME=postgres
-DB_SSLMODE=require
-DB_USER=readonly_user
-DB_PASS=your_password
+```bash
+# Run lint, unit tests and integration tests
+make check
 ```
 
----
+There are also a few more helpful commands for development. Run `make help` to learn more, or look in [Makefile](./Makefile).
 
-## ⚙️ How `mcp.json` configuration works
+<!--
+For Claude and other AI tools: Always prefer make targets over custom commands where possible.
+-->
 
-### 🗝️ `env` - credential key mapping
+## Architecture
 
-The `env` block does **not** contain the actual credentials. It maps each `MCP_KEY_*` to the name of the variable in your `.env` file.
-
-| Key in `env`   | Points to `.env` variable | Example value           |
-|----------------|---------------------------|-------------------------|
-| `MCP_KEY_HOST` | `DB_HOST`                 | `db.example.supabase.co`|
-| `MCP_KEY_PORT` | `DB_PORT`                 | `5432`                  |
-| `MCP_KEY_NAME` | `DB_NAME`                 | `postgres`              |
-| `MCP_KEY_SSLMODE` | `DB_SSLMODE`           | `require`               |
-| `MCP_KEY_USER` | `DB_USER`                 | `readonly_user`         |
-| `MCP_KEY_PASS` | `DB_PASS`                 | `secret`                |
-
-This indirection means you can use **any variable names** in your `.env` - useful when sharing an `.env` across multiple services with different naming conventions.
-
-### 🔧 `args` - tool selection via `tool=` prefix
-
-Each enabled MCP tool is declared as a separate arg using the `tool=<name>` format:
-
-```json
-"args": [
-  "-y",
-  "@edelciomolina/postgres-mcp",
-  "tool=pg_manage_schema",
-  "tool=pg_manage_indexes"
-]
-```
-
-This makes the tool list **explicit and auditable** directly in `mcp.json` - no hidden config files. 🔍
-
----
-
-## 🛡️ Why read-only is the default
-
-If you omit all `tool=` args, the server starts with a **curated read-only set** - every tool that can retrieve, analyze, or explain data, but nothing that can modify it.
-
-**✅ Included in defaults (read-only):**
+### Project Structure
 
 ```
-pg_execute_query    pg_manage_query    pg_inspect_schema
-pg_get_setup_instructions              pg_analyze_database
-pg_monitor_database                    pg_debug_database
+├── cmd/                     # Application entry points
+│   └── publisher/           # Server publishing tool
+├── data/                    # Seed data
+├── deploy/                  # Deployment configuration (Pulumi)
+├── docs/                    # Documentation
+├── internal/                # Private application code
+│   ├── api/                 # HTTP handlers and routing
+│   ├── auth/                # Authentication (GitHub OAuth, JWT, namespace blocking)
+│   ├── config/              # Configuration management
+│   ├── database/            # Data persistence (PostgreSQL)
+│   ├── service/             # Business logic
+│   ├── telemetry/           # Metrics and monitoring
+│   └── validators/          # Input validation
+├── pkg/                     # Public packages
+│   ├── api/                 # API types and structures
+│   │   └── v0/              # Version 0 API types
+│   └── model/               # Data models for server.json
+├── scripts/                 # Development and testing scripts
+├── tests/                   # Integration tests
+└── tools/                   # CLI tools and utilities
+    └── validate-*.sh        # Schema validation tools
 ```
 
-> 💡 `pg_execute_query` rejects `INSERT`, `UPDATE`, `DELETE`, DDL, `ANALYZE`, `VACUUM`, `EXPLAIN ANALYZE`, and other write/maintenance commands before the database is contacted.
+### Authentication
 
-> 💡 `pg_inspect_schema` provides read-only schema introspection (`get_info`, `get_enums`). For DDL operations use `pg_manage_schema` with explicit opt-in.
+Publishing supports multiple authentication methods:
+- **GitHub OAuth** - For publishing by logging into GitHub
+- **GitHub OIDC** - For publishing from GitHub Actions
+- **DNS verification** - For proving ownership of a domain and its subdomains
+- **HTTP verification** - For proving ownership of a domain
 
-**⚠️ Excluded from defaults - require `tool=` arg AND `POSTGRES_MCP_ALLOW_WRITE=true`:**
+The registry validates namespace ownership when publishing. E.g. to publish...:
+- `io.github.domdomegg/my-cool-mcp` you must login to GitHub as `domdomegg`, or be in a GitHub Action on domdomegg's repos
+- `me.adamjones/my-cool-mcp` you must prove ownership of `adamjones.me` via DNS or HTTP challenge
 
-| Tool | Operations |
-|------|------------|
-| `pg_manage_schema` | CREATE TABLE, ALTER TABLE, CREATE TYPE |
-| `pg_manage_indexes` | CREATE INDEX, DROP INDEX, REINDEX |
-| `pg_manage_constraints` | ADD CONSTRAINT, DROP CONSTRAINT |
-| `pg_manage_functions` | CREATE FUNCTION, DROP FUNCTION |
-| `pg_manage_triggers` | CREATE TRIGGER, DROP TRIGGER, enable/disable |
-| `pg_manage_rls` | ENABLE/DISABLE RLS, CREATE/ALTER/DROP POLICY |
-| `pg_manage_users` | CREATE/DROP/ALTER USER, GRANT, REVOKE |
-| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT |
-| `pg_execute_sql` | Arbitrary SQL with optional transaction |
+## Community Projects
 
----
+Check out [community projects](docs/community-projects.md) to explore notable registry-related work created by the community.
 
-## 📍 `.env` file discovery
+## More documentation
 
-The server resolves the `.env` file in this order:
-
-1. **`env-file=<path>` arg** - explicit path relative to `cwd`; takes priority over everything else
-2. **Walk-up** - starting from `cwd`, searches each parent directory until a `.env` is found or the filesystem root is reached
-
-If no `.env` is found, the server exits with a clear error message.
-
-### Monorepos and subfolders
-
-When VS Code starts the MCP process, `cwd` is typically the workspace root. If your `.env` lives in a subfolder (e.g. `functions/.env`), use `env-file=` to point to it explicitly:
-
-```json
-{
-  "servers": {
-    "Postgres Tools": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@edelciomolina/postgres-mcp",
-        "env-file=functions/.env"
-      ],
-      "env": {
-        "MCP_KEY_HOST":    "DB_HOST",
-        "MCP_KEY_PORT":    "DB_PORT",
-        "MCP_KEY_NAME":    "DB_NAME",
-        "MCP_KEY_SSLMODE": "DB_SSLMODE",
-        "MCP_KEY_USER":    "DB_USER",
-        "MCP_KEY_PASS":    "DB_PASS"
-      }
-    }
-  }
-}
-```
-
-> 💡 The walk-up behavior handles the common case automatically. Use `env-file=` when you need explicit control (CI, monorepos, Docker bind-mounts).
-
----
-
-## 🧰 Available tools
-
-### Read-only (enabled by default)
-
-| Tool | Description |
-|------|-------------|
-| `pg_execute_query` | SELECT / COUNT / EXISTS with write-op and multi-statement guards |
-| `pg_manage_query` | EXPLAIN plans, slow query analysis, `pg_stat_statements` |
-| `pg_inspect_schema` | Schema info and ENUM types (read-only introspection) |
-| `pg_get_setup_instructions` | Platform-specific PostgreSQL setup instructions |
-| `pg_analyze_database` | Performance, configuration, and storage analysis |
-| `pg_monitor_database` | Real-time connection, query, lock, and replication monitoring |
-| `pg_debug_database` | Diagnose connections, locks, performance, and replication |
-
-### Write-capable (opt-in via `tool=` arg + `POSTGRES_MCP_ALLOW_WRITE=true`)
-
-| Tool | Description |
-|------|-------------|
-| `pg_manage_schema` | Schema info, create/alter tables, manage ENUMs |
-| `pg_manage_indexes` | Get, create, drop, reindex, analyze index usage |
-| `pg_manage_constraints` | Get, create, and drop constraints and foreign keys |
-| `pg_manage_functions` | Get, create, and drop functions/procedures |
-| `pg_manage_triggers` | Get, create, drop, enable/disable triggers |
-| `pg_manage_rls` | Row-Level Security policies |
-| `pg_manage_users` | User permissions, create/drop/alter users, grant/revoke |
-| `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT with parameterized queries |
-| `pg_execute_sql` | Arbitrary SQL execution with optional transaction support |
-
----
-
-## 🏗️ Architecture
-
-For a deep dive into the communication flow between the MCP client, proxy, and PostgreSQL - including the full sequence diagram - see [ARCHITECT.md](ARCHITECT.md).
-
----
-
-## 📄 License
-
-MIT © [Edelcio Molina](https://github.com/edelciomolina)
+See the [documentation](./docs) for more details if your question has not been answered here!

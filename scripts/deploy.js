@@ -1,5 +1,6 @@
 const { spawnSync } = require("child_process");
 const { readFileSync, writeFileSync } = require("fs");
+const { createInterface } = require("readline");
 const path = require("path");
 
 const validRelease = /^(patch|minor|major|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
@@ -27,7 +28,12 @@ function checkPrerequisites() {
     }
 }
 
-function deploy(release = "minor", runCommand = run) {
+function ask(prompt) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise(resolve => rl.question(prompt, answer => { rl.close(); resolve(answer.trim()); }));
+}
+
+async function deploy(release = "minor", runCommand = run) {
     if (!isValidRelease(release)) {
         throw new Error(`Invalid release "${release}". Use patch, minor, major or an explicit semver.`);
     }
@@ -64,23 +70,39 @@ function deploy(release = "minor", runCommand = run) {
         writeFileSync(pkgPath, pkgOriginal);
     }
 
+    // Publish to the MCP Registry using the native mcp-publisher CLI.
+    const publisherInstalled = spawnSync("mcp-publisher", ["--help"], {
+        encoding: "utf8",
+        shell: process.platform === "win32"
+    });
+    if (publisherInstalled.status === 0) {
+        runCommand("mcp-publisher", ["publish"]);
+    } else {
+        console.log("\n  [!] mcp-publisher CLI not found — skipping MCP Registry publish.");
+        console.log("      Install it: https://github.com/modelcontextprotocol/registry#publishing-a-server");
+        console.log("      Then run:   mcp-publisher login github && mcp-publisher publish\n");
+    }
+
     console.log("\n" + "=".repeat(60));
     console.log(`Published v${newVersion} successfully!`);
     console.log(`  VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=edelciomolina.postgres-mcp`);
     console.log(`  npm: https://www.npmjs.com/package/@edelciomolina/postgres-mcp`);
     console.log("=".repeat(60));
-    console.log("\nRemaining manual steps:");
-    console.log("");
-    console.log("  1. Git commit and push:");
-    console.log(`     git add .`);
-    console.log(`     git commit -m "chore(release): v${newVersion}"`);
-    console.log(`     git tag v${newVersion}`);
-    console.log(`     git push --follow-tags`);
-    console.log("");
-    console.log("  2. MCP Registry (via https://registry.modelcontextprotocol.io):");
-    console.log(`     Verify that v${newVersion} appears after the npm publish propagates.`);
-    console.log(`     The registry auto-syncs from npm for packages with a server.json.`);
-    console.log("");
+
+    const doGit = await ask(`\nCommit and push "chore(release): v${newVersion}"? [Y/n] `);
+    if (doGit.toLowerCase() !== "n") {
+        runCommand("git", ["add", "."]);
+        runCommand("git", ["commit", "-m", `chore(release): v${newVersion}`]);
+        runCommand("git", ["tag", `v${newVersion}`]);
+        runCommand("git", ["push", "--follow-tags"]);
+        console.log("\nGit commit, tag, and push completed.");
+    } else {
+        console.log("\nManual git steps:");
+        console.log(`  git add .`);
+        console.log(`  git commit -m "chore(release): v${newVersion}"`);
+        console.log(`  git tag v${newVersion}`);
+        console.log(`  git push --follow-tags`);
+    }
 }
 
 function bumpVersion(current, release) {
@@ -119,7 +141,7 @@ function run(command, args, spawn = spawnSync, platform = process.platform) {
     const result = spawn(command, args, {
         cwd: path.join(__dirname, ".."),
         stdio: "inherit",
-        shell: platform === "win32" && (command === "npm" || command === "npx" || command.endsWith(".cmd"))
+        shell: platform === "win32" && (command === "npm" || command === "npx" || command === "mcp-publisher" || command.endsWith(".cmd"))
     });
 
     if (result.error) {
@@ -131,9 +153,9 @@ function run(command, args, spawn = spawnSync, platform = process.platform) {
     }
 }
 
-function main(args = process.argv.slice(2), logger = console, deployAction = deploy) {
+async function main(args = process.argv.slice(2), logger = console, deployAction = deploy) {
     try {
-        deployAction(args[0]);
+        await deployAction(args[0]);
         return 0;
     } catch (error) {
         logger.error(error.message);
@@ -142,7 +164,7 @@ function main(args = process.argv.slice(2), logger = console, deployAction = dep
 }
 
 if (require.main === module) {
-    process.exitCode = main();
+    main().then(code => { process.exitCode = code; });
 }
 
 module.exports = { deploy, bumpVersion, updateServerJson, isValidRelease, main, run, vsceExecutable };
