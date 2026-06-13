@@ -19,12 +19,14 @@
 
 ## ✨ What it does
 
-This is a **native MCP server** built directly with [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) and [`pg`](https://www.npmjs.com/package/pg) (node-postgres). It provides:
+Most LLMs interact with databases by guessing - assuming table names, inventing column names, and writing queries that may fail or expose sensitive data. Postgres MCP solves this by giving the LLM a **structured, safe interface** to actually understand the database before touching it.
 
-- 🔐 **Runtime credential resolution** - reads database credentials from your `.env` file at startup, without storing secrets in `mcp.json`
-- 🗝️ **Flexible key mapping** - use any variable names in `.env`; tell the server which ones to use via `env` in `mcp.json`
-- 🎯 **Explicit tool selection** - pass `tool=<name>` arguments to choose exactly which MCP tools to expose
-- 🛡️ **Read-only by default** - if no tools are specified, only safe introspection tools are enabled (no writes, no arbitrary SQL execution)
+Built with [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) and [`pg`](https://www.npmjs.com/package/pg), it provides:
+
+- 🧠 **Semantic knowledge graph** - the LLM gets a complete map of schemas, tables, columns, foreign keys, inferred relations, risk levels, and business domains - built from the real schema, not invented
+- 🛡️ **Read-only by default** - no writes, no DDL, no arbitrary SQL unless you explicitly opt in; `pg_classify_query_risk` lets the LLM check a query's safety before running it
+- 🔐 **Runtime credential resolution** - credentials are read from `.env` at startup; nothing sensitive lives in `mcp.json`
+- 🎯 **Explicit tool selection** - every tool is opt-in via `tool=<name>` args, so the LLM only sees what you choose to expose
 
 ---
 
@@ -232,9 +234,11 @@ If you omit all `tool=` arguments, the server starts with a **curated read-only 
 **✅ Included in defaults (read-only):**
 
 ```
-pg_execute_query    pg_manage_query    pg_inspect_schema
-pg_get_setup_instructions              pg_analyze_database
-pg_monitor_database                    pg_debug_database
+pg_execute_query       pg_manage_query        pg_inspect_schema
+pg_get_setup_instructions                     pg_analyze_database
+pg_monitor_database                           pg_debug_database
+pg_inspect_database_graph                     pg_describe_table_semantics
+pg_find_related_tables                        pg_classify_query_risk
 ```
 
 > 💡 `pg_execute_query` rejects `INSERT`, `UPDATE`, `DELETE`, DDL, `ANALYZE`, `VACUUM`, `EXPLAIN ANALYZE` and other write/maintenance commands before the database is queried.
@@ -311,6 +315,10 @@ When VS Code starts the MCP process, `cwd` is typically the workspace root. If y
 | `pg_analyze_database` | Performance, configuration, and storage analysis |
 | `pg_monitor_database` | Real-time monitoring of connections, queries, locks, and replication |
 | `pg_debug_database` | Diagnose connections, locks, performance, and replication |
+| `pg_inspect_database_graph` | Build a full knowledge graph of the database: schemas, tables, columns, FKs, indexes, inferred relations, and business domains |
+| `pg_describe_table_semantics` | Describe a table with semantic context: risk level, column roles, sensitive columns, and related tables |
+| `pg_find_related_tables` | Find tables related to a given table via explicit FKs and inferred naming patterns, with path explanation |
+| `pg_classify_query_risk` | Classify query risk (`safe` / `warning` / `review` / `blocked`) without executing it |
 
 ### Write-capable (opt-in via `tool=` argument + `POSTGRES_MCP_ALLOW_WRITE=true`)
 
@@ -325,6 +333,36 @@ When VS Code starts the MCP process, `cwd` is typically the workspace root. If y
 | `pg_manage_users` | User permissions, create/drop/alter users, grant/revoke |
 | `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT with parameterized queries |
 | `pg_execute_sql` | Arbitrary SQL execution with optional transaction support |
+
+---
+
+## 🧠 Semantic Layer
+
+The four `pg_*_graph` / `pg_*_semantics` / `pg_*_risk` tools build an in-memory knowledge graph of your database at runtime. This gives the LLM a structured map - schemas, tables, columns, foreign keys, inferred relations, risk levels, and business domains - **without executing any query against your data**.
+
+All inferred fields (column semantic roles, table probable types, inferred relations) are clearly tagged so the LLM knows to treat them as hints, not schema facts.
+
+### Optional configuration (`mcp-config.json`)
+
+Place a `mcp-config.json` file beside your `.env` to tune the semantic layer and security limits. All fields are optional - omitting the file applies safe defaults.
+
+```json
+{
+  "security": {
+    "defaultLimit": 100,
+    "maxLimit": 1000,
+    "blockedSchemas": ["pg_catalog", "information_schema"],
+    "blockedTables": [],
+    "requireLimit": true
+  },
+  "semanticLayer": {
+    "enabled": true,
+    "inferRelationsWithoutForeignKeys": true,
+    "inferBusinessEntities": true,
+    "sensitiveKeywords": ["password", "secret", "token", "api_key", "ssn", "hash"]
+  }
+}
+```
 
 ---
 

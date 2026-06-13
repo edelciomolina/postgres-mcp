@@ -12,6 +12,11 @@ import { Pool } from "pg";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
+import { loadConfig } from "./config.js";
+import {
+  registerSemanticTools,
+  SEMANTIC_TOOLS
+} from "./tools/semantic-tools.js";
 
 // ---------------------------------------------------------------------------
 // Default read-only tools - no writes, no DDL, no arbitrary SQL
@@ -23,7 +28,11 @@ export const DEFAULT_READONLY_TOOLS: readonly string[] = [
   "pg_get_setup_instructions",
   "pg_analyze_database",
   "pg_monitor_database",
-  "pg_debug_database"
+  "pg_debug_database",
+  "pg_inspect_database_graph",
+  "pg_describe_table_semantics",
+  "pg_find_related_tables",
+  "pg_classify_query_risk"
 ];
 
 /**
@@ -49,7 +58,8 @@ export const WRITE_CAPABLE_TOOLS: readonly string[] = [
  */
 export const SUPPORTED_TOOLS: readonly string[] = [
   ...DEFAULT_READONLY_TOOLS,
-  ...WRITE_CAPABLE_TOOLS
+  ...WRITE_CAPABLE_TOOLS,
+  ...SEMANTIC_TOOLS
 ];
 
 // ---------------------------------------------------------------------------
@@ -2069,6 +2079,8 @@ function main(): void {
     process.exit(1);
   }
 
+  const config = loadConfig(resolve(envPath, ".."));
+
   const envVars = process.env as Record<string, string>;
 
   // URL-based connection takes priority over individual credentials
@@ -2159,6 +2171,7 @@ function main(): void {
   );
 
   registerTools(server, pool, enabledTools);
+  registerSemanticTools(server, pool, config, enabledTools);
 
   const transport = new StdioServerTransport();
   server.connect(transport).catch((err: Error) => {
