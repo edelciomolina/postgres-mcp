@@ -19,12 +19,14 @@
 
 ## ✨ O que faz
 
-Este é um **servidor MCP nativo** construído diretamente com [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) e [`pg`](https://www.npmjs.com/package/pg) (node-postgres). Ele oferece:
+A maioria das LLMs interage com bancos de dados no escuro - chutando nomes de tabelas, inventando colunas e escrevendo queries que podem falhar ou expor dados sensíveis. O Postgres MCP resolve isso dando à LLM uma **interface estruturada e segura** para realmente entender o banco antes de consultá-lo.
 
-- 🔐 **Resolução de credenciais em tempo de execução** - lê as credenciais do banco de dados do seu arquivo `.env` na inicialização, sem armazenar segredos no `mcp.json`
-- 🗝️ **Mapeamento de chaves flexível** - use quaisquer nomes de variáveis no `.env`; indique ao servidor quais usar via `env` no `mcp.json`
-- 🎯 **Seleção explícita de ferramentas** - passe argumentos `tool=<nome>` para escolher exatamente quais ferramentas MCP expor
-- 🛡️ **Somente leitura por padrão** - se nenhuma ferramenta for especificada, apenas ferramentas seguras de introspecção são habilitadas (sem escrita, sem execução de SQL arbitrário)
+Construído com [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) e [`pg`](https://www.npmjs.com/package/pg), ele oferece:
+
+- 🧠 **Grafo de conhecimento semântico** - a LLM recebe um mapa completo de schemas, tabelas, colunas, chaves estrangeiras, relações inferidas, níveis de risco e domínios de negócio - construído a partir do schema real, não inventado
+- 🛡️ **Somente leitura por padrão** - sem escrita, sem DDL, sem SQL arbitrário a menos que você opte explicitamente; `pg_classify_query_risk` permite que a LLM verifique o risco de uma query antes de executá-la
+- 🔐 **Resolução de credenciais em tempo de execução** - as credenciais são lidas do `.env` na inicialização; nada sensível fica no `mcp.json`
+- 🎯 **Seleção explícita de ferramentas** - cada ferramenta é opt-in via argumentos `tool=<nome>`, então a LLM só vê o que você escolher expor
 
 ---
 
@@ -232,9 +234,11 @@ Se você omitir todos os argumentos `tool=`, o servidor inicia com um **conjunto
 **✅ Incluídas nos padrões (somente leitura):**
 
 ```
-pg_execute_query    pg_manage_query    pg_inspect_schema
-pg_get_setup_instructions              pg_analyze_database
-pg_monitor_database                    pg_debug_database
+pg_execute_query       pg_manage_query        pg_inspect_schema
+pg_get_setup_instructions                     pg_analyze_database
+pg_monitor_database                           pg_debug_database
+pg_inspect_database_graph                     pg_describe_table_semantics
+pg_find_related_tables                        pg_classify_query_risk
 ```
 
 > 💡 `pg_execute_query` rejeita `INSERT`, `UPDATE`, `DELETE`, DDL, `ANALYZE`, `VACUUM`, `EXPLAIN ANALYZE` e outros comandos de escrita/manutenção antes de o banco de dados ser consultado.
@@ -311,6 +315,10 @@ Quando o VS Code inicia o processo MCP, o `cwd` é tipicamente a raiz do workspa
 | `pg_analyze_database` | Análise de performance, configuração e armazenamento |
 | `pg_monitor_database` | Monitoramento em tempo real de conexões, queries, locks e replicação |
 | `pg_debug_database` | Diagnosticar conexões, locks, performance e replicação |
+| `pg_inspect_database_graph` | Constrói um grafo de conhecimento do banco: schemas, tabelas, colunas, FKs, índices, relações inferidas e domínios de negócio |
+| `pg_describe_table_semantics` | Descreve uma tabela com contexto semântico: nível de risco, papéis das colunas, colunas sensíveis e tabelas relacionadas |
+| `pg_find_related_tables` | Encontra tabelas relacionadas via FKs explícitas e padrões de nomenclatura inferidos, com explicação do caminho |
+| `pg_classify_query_risk` | Classifica o risco de uma query (`safe` / `warning` / `review` / `blocked`) sem executá-la |
 
 ### Com capacidade de escrita (opt-in via argumento `tool=` + `POSTGRES_MCP_ALLOW_WRITE=true`)
 
@@ -325,6 +333,36 @@ Quando o VS Code inicia o processo MCP, o `cwd` é tipicamente a raiz do workspa
 | `pg_manage_users` | Permissões de usuários, criar/remover/alterar usuários, grant/revoke |
 | `pg_execute_mutation` | INSERT / UPDATE / DELETE / UPSERT com queries parametrizadas |
 | `pg_execute_sql` | Execução de SQL arbitrário com suporte opcional a transações |
+
+---
+
+## 🧠 Camada Semântica
+
+As quatro ferramentas `pg_*_graph` / `pg_*_semantics` / `pg_*_risk` constroem um grafo de conhecimento em memória do seu banco de dados em tempo de execução. Isso fornece à LLM um mapa estruturado - schemas, tabelas, colunas, chaves estrangeiras, relações inferidas, níveis de risco e domínios de negócio - **sem executar nenhuma query contra seus dados**.
+
+Todos os campos inferidos (papéis semânticos de colunas, tipo provável de tabelas, relações inferidas) são claramente marcados para que a LLM saiba tratá-los como sugestões, não como fatos do schema.
+
+### Configuração opcional (`mcp-config.json`)
+
+Coloque um arquivo `mcp-config.json` ao lado do seu `.env` para ajustar a camada semântica e os limites de segurança. Todos os campos são opcionais - omitir o arquivo aplica os padrões seguros.
+
+```json
+{
+  "security": {
+    "defaultLimit": 100,
+    "maxLimit": 1000,
+    "blockedSchemas": ["pg_catalog", "information_schema"],
+    "blockedTables": [],
+    "requireLimit": true
+  },
+  "semanticLayer": {
+    "enabled": true,
+    "inferRelationsWithoutForeignKeys": true,
+    "inferBusinessEntities": true,
+    "sensitiveKeywords": ["password", "secret", "token", "api_key", "ssn", "hash"]
+  }
+}
+```
 
 ---
 

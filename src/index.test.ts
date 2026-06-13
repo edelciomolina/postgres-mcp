@@ -14,6 +14,11 @@ import {
   isWriteOperation,
   MCP_INSTRUCTIONS
 } from "./index";
+import { classifyColumn } from "./semantic/table-classifier";
+import { classifyTable } from "./semantic/risk-classifier";
+import { classifyQueryRisk } from "./semantic/risk-classifier";
+import { inferRelations, inferDomains } from "./semantic/relationship-inferer";
+import { loadConfig, DEFAULT_CONFIG } from "./config";
 
 // ---------------------------------------------------------------------------
 // loadEnvFile
@@ -333,6 +338,218 @@ describe("DATABASE_URL support via resolveCredential", () => {
 });
 
 // ---------------------------------------------------------------------------
+// SEMANTIC_TOOLS present in DEFAULT_READONLY_TOOLS and SUPPORTED_TOOLS
+// ---------------------------------------------------------------------------
+describe("SEMANTIC_TOOLS", () => {
+  const semanticTools = [
+    "pg_inspect_database_graph",
+    "pg_describe_table_semantics",
+    "pg_find_related_tables",
+    "pg_classify_query_risk"
+  ];
+
+  for (const tool of semanticTools) {
+    test(`${tool} is in DEFAULT_READONLY_TOOLS`, () => {
+      expect(DEFAULT_READONLY_TOOLS.includes(tool)).toBe(true);
+    });
+    test(`${tool} is in SUPPORTED_TOOLS`, () => {
+      expect(SUPPORTED_TOOLS.includes(tool)).toBe(true);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// classifyColumn
+// ---------------------------------------------------------------------------
+describe("classifyColumn", () => {
+  const sensitiveKeywords = DEFAULT_CONFIG.semanticLayer.sensitiveKeywords;
+
+  test("marks primary key columns", () => {
+    const col = classifyColumn(
+      "id",
+      "integer",
+      false,
+      null,
+      true,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("primary_key");
+    expect(col.isSensitive).toBe(false);
+  });
+
+  test("marks foreign key columns by structural flag", () => {
+    const col = classifyColumn(
+      "user_id",
+      "integer",
+      false,
+      null,
+      false,
+      true,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("foreign_key");
+  });
+
+  test("infers foreign key from _id suffix", () => {
+    const col = classifyColumn(
+      "order_id",
+      "integer",
+      true,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("foreign_key");
+  });
+
+  test("marks password columns as sensitive", () => {
+    const col = classifyColumn(
+      "password_hash",
+      "text",
+      false,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.isSensitive).toBe(true);
+    expect(col.semanticRole).toBe("sensitive");
+  });
+
+  test("marks token columns as sensitive", () => {
+    const col = classifyColumn(
+      "access_token",
+      "text",
+      true,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.isSensitive).toBe(true);
+  });
+
+  test("classifies created_at as timestamp", () => {
+    const col = classifyColumn(
+      "created_at",
+      "timestamp with time zone",
+      true,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("timestamp");
+  });
+
+  test("classifies is_active as flag", () => {
+    const col = classifyColumn(
+      "is_active",
+      "boolean",
+      false,
+      "true",
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("flag");
+  });
+
+  test("classifies boolean type as flag", () => {
+    const col = classifyColumn(
+      "enabled",
+      "boolean",
+      false,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("flag");
+  });
+
+  test("classifies status as status role", () => {
+    const col = classifyColumn(
+      "status",
+      "character varying",
+      false,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("status");
+  });
+
+  test("classifies price as amount", () => {
+    const col = classifyColumn(
+      "price",
+      "numeric",
+      false,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("amount");
+  });
+
+  test("classifies email as identifier", () => {
+    const col = classifyColumn(
+      "email",
+      "text",
+      false,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("identifier");
+  });
+
+  test("classifies name as label", () => {
+    const col = classifyColumn(
+      "name",
+      "text",
+      false,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("label");
+  });
+
+  test("classifies jsonb as json_blob", () => {
+    const col = classifyColumn(
+      "metadata",
+      "jsonb",
+      true,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.semanticRole).toBe("json_blob");
+  });
+
+  test("tags all columns as inferred", () => {
+    const col = classifyColumn(
+      "foo",
+      "text",
+      true,
+      null,
+      false,
+      false,
+      sensitiveKeywords
+    );
+    expect(col.isInferred).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // vsceExtensionName (deploy.js helper — tested inline to keep test suite in TS)
 // ---------------------------------------------------------------------------
 describe("vsceExtensionName", () => {
@@ -352,5 +569,280 @@ describe("vsceExtensionName", () => {
 
   test("handles other scopes", () => {
     expect(vsceExtensionName("@myorg/my-extension")).toBe("my-extension");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyTable (via risk-classifier)
+// ---------------------------------------------------------------------------
+describe("classifyTable", () => {
+  function makeCol(name: string, role: string, isSensitive = false) {
+    return {
+      name,
+      dataType: "text",
+      isNullable: true,
+      columnDefault: null,
+      semanticRole: role as any,
+      isSensitive,
+      isInferred: true
+    };
+  }
+
+  test("classifies users as medium risk", () => {
+    const node = classifyTable("public", "users", "BASE TABLE", [], null, []);
+    expect(node.riskLevel).toBe("medium");
+  });
+
+  test("classifies users with sensitive columns as sensitive", () => {
+    const cols = [makeCol("password", "sensitive", true)];
+    const node = classifyTable("public", "users", "BASE TABLE", cols, null, []);
+    expect(node.riskLevel).toBe("sensitive");
+  });
+
+  test("classifies blocked table as restricted", () => {
+    const node = classifyTable("public", "secrets", "BASE TABLE", [], null, [
+      "secrets"
+    ]);
+    expect(node.riskLevel).toBe("restricted");
+    expect(node.allowedOperations).toEqual(["inspect"]);
+  });
+
+  test("classifies *_log table as audit type", () => {
+    const node = classifyTable(
+      "public",
+      "audit_log",
+      "BASE TABLE",
+      [],
+      null,
+      []
+    );
+    expect(node.probableType).toBe("audit");
+  });
+
+  test("classifies junction table by FK column pattern", () => {
+    const cols = [
+      makeCol("id", "primary_key"),
+      makeCol("user_id", "foreign_key"),
+      makeCol("role_id", "foreign_key")
+    ];
+    const node = classifyTable(
+      "public",
+      "user_roles",
+      "BASE TABLE",
+      cols,
+      null,
+      []
+    );
+    expect(node.probableType).toBe("junction");
+  });
+
+  test("safe table allows unrestricted_select", () => {
+    const node = classifyTable(
+      "public",
+      "products",
+      "BASE TABLE",
+      [],
+      null,
+      []
+    );
+    expect(node.riskLevel).toBe("safe");
+    expect(node.allowedOperations).toContain("unrestricted_select");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyQueryRisk
+// ---------------------------------------------------------------------------
+describe("classifyQueryRisk", () => {
+  const config = {
+    blockedSchemas: ["pg_catalog", "information_schema"],
+    requireLimit: true,
+    maxLimit: 100
+  };
+
+  test("blocks INSERT queries", () => {
+    const result = classifyQueryRisk(
+      "INSERT INTO users VALUES (1)",
+      [],
+      config
+    );
+    expect(result.level).toBe("blocked");
+  });
+
+  test("blocks EXPLAIN ANALYZE", () => {
+    const result = classifyQueryRisk(
+      "EXPLAIN ANALYZE SELECT * FROM t",
+      [],
+      config
+    );
+    expect(result.level).toBe("blocked");
+  });
+
+  test("blocks queries referencing blocked schemas", () => {
+    const result = classifyQueryRisk(
+      "SELECT * FROM pg_catalog.pg_tables",
+      [],
+      config
+    );
+    expect(result.level).toBe("blocked");
+  });
+
+  test("warns when LIMIT is missing", () => {
+    const result = classifyQueryRisk("SELECT * FROM products", [], config);
+    expect(result.level).toBe("warning");
+    expect(result.reasons.some((r) => r.includes("LIMIT"))).toBe(true);
+  });
+
+  test("is safe when LIMIT is present and no risky tables", () => {
+    const result = classifyQueryRisk(
+      "SELECT * FROM products LIMIT 10",
+      [],
+      config
+    );
+    expect(result.level).toBe("safe");
+  });
+
+  test("review level for query on sensitive table", () => {
+    const tables = [
+      {
+        schema: "public",
+        name: "users",
+        tableType: "BASE TABLE",
+        probableType: "entity" as any,
+        riskLevel: "sensitive" as any,
+        allowedOperations: ["inspect", "describe", "count"] as any,
+        columns: [
+          {
+            name: "password",
+            dataType: "text",
+            isNullable: false,
+            columnDefault: null,
+            semanticRole: "sensitive" as any,
+            isSensitive: true,
+            isInferred: true
+          }
+        ],
+        rowEstimate: null,
+        isInferred: true
+      }
+    ];
+    const result = classifyQueryRisk(
+      "SELECT * FROM users LIMIT 10",
+      tables,
+      config
+    );
+    expect(result.level).toBe("review");
+    expect(result.suggestions.some((s) => s.includes("password"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// inferRelations
+// ---------------------------------------------------------------------------
+describe("inferRelations", () => {
+  function makeTable(
+    schema: string,
+    name: string,
+    cols: Array<{ name: string; role: string }>
+  ) {
+    return {
+      schema,
+      name,
+      tableType: "BASE TABLE",
+      probableType: "entity" as any,
+      riskLevel: "safe" as any,
+      allowedOperations: [] as any,
+      rowEstimate: null,
+      isInferred: true,
+      columns: cols.map((c) => ({
+        name: c.name,
+        dataType: "integer",
+        isNullable: true,
+        columnDefault: null,
+        semanticRole: c.role as any,
+        isSensitive: false,
+        isInferred: true
+      }))
+    };
+  }
+
+  test("infers relation from user_id to users table", () => {
+    const tables = [
+      makeTable("public", "orders", [{ name: "user_id", role: "foreign_key" }]),
+      makeTable("public", "users", [{ name: "id", role: "primary_key" }])
+    ];
+    const relations = inferRelations(tables, []);
+    expect(relations.length).toBeGreaterThan(0);
+    const rel = relations.find(
+      (r) => r.fromTable === "orders" && r.toTable === "users"
+    );
+    expect(rel).toBeDefined();
+    expect(rel?.confidence).toBe("high");
+    expect(rel?.isInferred).toBe(true);
+  });
+
+  test("does not create duplicate for existing FK", () => {
+    const tables = [
+      makeTable("public", "orders", [{ name: "user_id", role: "foreign_key" }]),
+      makeTable("public", "users", [{ name: "id", role: "primary_key" }])
+    ];
+    const existingFKs = [
+      {
+        constraintName: "fk_orders_user",
+        fromSchema: "public",
+        fromTable: "orders",
+        fromColumn: "user_id",
+        toSchema: "public",
+        toTable: "users",
+        toColumn: "id",
+        onDelete: null,
+        onUpdate: null
+      }
+    ];
+    const relations = inferRelations(tables, existingFKs);
+    expect(relations.length).toBe(0);
+  });
+
+  test("skips columns without _id suffix", () => {
+    const tables = [
+      makeTable("public", "orders", [{ name: "status", role: "status" }]),
+      makeTable("public", "users", [{ name: "id", role: "primary_key" }])
+    ];
+    const relations = inferRelations(tables, []);
+    expect(relations.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadConfig
+// ---------------------------------------------------------------------------
+describe("loadConfig", () => {
+  test("returns DEFAULT_CONFIG when no mcp-config.json exists", () => {
+    const config = loadConfig("/nonexistent/path");
+    expect(config.security.defaultLimit).toBe(
+      DEFAULT_CONFIG.security.defaultLimit
+    );
+    expect(config.semanticLayer.enabled).toBe(
+      DEFAULT_CONFIG.semanticLayer.enabled
+    );
+  });
+
+  test("merges partial config with defaults", () => {
+    const file = join(tmpdir(), "mcp-config.json");
+    writeFileSync(file, JSON.stringify({ security: { defaultLimit: 50 } }));
+    const config = loadConfig(tmpdir());
+    expect(config.security.defaultLimit).toBe(50);
+    expect(config.security.maxLimit).toBe(DEFAULT_CONFIG.security.maxLimit);
+    unlinkSync(file);
+  });
+
+  test("returns defaults on malformed JSON", () => {
+    const file = join(tmpdir(), "mcp-config.json");
+    writeFileSync(file, "{ not valid json");
+    const config = loadConfig(tmpdir());
+    expect(config.security.defaultLimit).toBe(
+      DEFAULT_CONFIG.security.defaultLimit
+    );
+    unlinkSync(file);
   });
 });
